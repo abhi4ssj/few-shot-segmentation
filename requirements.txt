@@ -1,0 +1,11 @@
+matplotlib
+numpy
+torch
+torchvision
+nibabel
+tensorboardX
+tensorflow
+torchnet
+squeeze-and-excitation
+nn-common-modules
+nn-additional-losses
