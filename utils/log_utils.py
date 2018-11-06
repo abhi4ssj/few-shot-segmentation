@@ -51,7 +51,7 @@ class LogWriter(object):
 
     def cm_per_epoch(self, phase, output, correct_labels, epoch):
         print("Confusion Matrix...", end='', flush=True)
-        _, cm = eu.dice_confusion_matrix(output, correct_labels, self.num_class)
+        _, cm = eu.dice_confusion_matrix(output, correct_labels, self.num_class, mode='train')
         self.plot_cm('confusion_matrix', phase, cm, epoch)
         print("DONE", flush=True)
 

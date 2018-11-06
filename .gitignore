@@ -6,6 +6,5 @@
 saved_models/Ex**
 build
 build/*
-quickNAT_pytorch.egg-info
-quickNAT_pytorch.egg-info/*
 other_packages/
+dataset/

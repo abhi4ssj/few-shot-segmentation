@@ -45,6 +45,9 @@ def remap_labels(labels, remap_config):
         labels[(labels >= 100) & (labels % 2 == 1)] = 211
         label_list = [45, 211, 52, 50, 41, 39, 60, 37, 58, 56, 4, 11, 35, 48, 32, 46, 30, 62, 44, 210, 51, 49, 40, 38,
                       59, 36, 57, 55, 47, 31, 23, 61]
+
+    elif remap_config == 'WholeBody':
+        label_list = [1, 2, 7, 8, 9, 13, 14, 17, 18]
     else:
         raise ValueError("Invalid argument value for remap config, only valid options are FS and Neo")
 
