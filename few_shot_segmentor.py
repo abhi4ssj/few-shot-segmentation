@@ -1,14 +1,45 @@
-"""ClassificationCNN"""
+"""Few-Shot_learning Segmentation"""
+
 import numpy as np
 import torch
 import torch.nn as nn
 from nn_common_modules import modules as sm
 
 
-class QuickNat(nn.Module):
+class Conditioner(nn.Module):
     """
-    A PyTorch implementation of QuickNAT
-    Coded by Abhijit and Shayan
+    A conditional branch of few shot learning regressing the parameters for the segmentor
+
+    """
+
+    def __init__(self, params):
+        super(Conditioner, self).__init__()
+        params['num_channels'] = 2
+        self.genblock1 = sm.GenericBlock(params)
+        params['num_channels'] = 64
+        self.genblock2 = sm.GenericBlock(params)
+        self.genblock3 = sm.GenericBlock(params)
+        self.maxpool = nn.MaxPool2d(kernel_size=params['pool'], stride=params['stride_pool'], return_indices=True)
+        self.tanh = nn.Tanh()
+
+    def forward(self, input):
+        o1 = self.genblock1(input)
+        o2 = self.maxpool(o1)
+        o3 = self.genblock2(o2)
+        o4 = self.maxpool(o3)
+        o5 = self.genblock3(o4)
+        batch_size, num_channels, H, W = o1.size()
+        o6 = self.tanh(o1.view(batch_size, num_channels, -1).mean(dim=2))
+        batch_size, num_channels, H, W = o3.size()
+        o7 = self.tanh(o3.view(batch_size, num_channels, -1).mean(dim=2))
+        batch_size, num_channels, H, W = o5.size()
+        o8 = self.tanh(o5.view(batch_size, num_channels, -1).mean(dim=2))
+        return o6, o7, o8
+
+
+class Segmentor(nn.Module):
+    """
+    Segmentor Code
 
     param ={
         'num_channels':1,
@@ -26,37 +57,50 @@ class QuickNat(nn.Module):
     """
 
     def __init__(self, params):
-        super(QuickNat, self).__init__()
-
+        super(Segmentor, self).__init__()
+        self.weights = weights
         self.encode1 = sm.EncoderBlock(params)
         params['num_channels'] = 64
         self.encode2 = sm.EncoderBlock(params)
         self.encode3 = sm.EncoderBlock(params)
-        self.encode4 = sm.EncoderBlock(params)
         self.bottleneck = sm.DenseBlock(params)
         params['num_channels'] = 128
         self.decode1 = sm.DecoderBlock(params)
         self.decode2 = sm.DecoderBlock(params)
         self.decode3 = sm.DecoderBlock(params)
-        self.decode4 = sm.DecoderBlock(params)
         params['num_channels'] = 64
         self.classifier = sm.ClassifierBlock(params)
 
-    def forward(self, input):
-        e1, out1, ind1 = self.encode1.forward(input)
-        e2, out2, ind2 = self.encode2.forward(e1)
-        e3, out3, ind3 = self.encode3.forward(e2)
-        e4, out4, ind4 = self.encode4.forward(e3)
+    def forward(self, input, weights=None):
+        w1, w2, w3 = weights if weights else (None, None, None)
+        e1, out1, ind1 = self.encode1(input)
+        e2, out2, ind2 = self.encode2(e1)
+        e3, out3, ind3 = self.encode3(e2)
 
-        bn = self.bottleneck.forward(e4)
+        bn = self.bottleneck.forward(e3)
 
-        d4 = self.decode4.forward(bn, out4, ind4)
-        d3 = self.decode1.forward(d4, out3, ind3)
-        d2 = self.decode2.forward(d3, out2, ind2)
-        d1 = self.decode3.forward(d2, out1, ind1)
+        d3 = self.decode1(bn, out3, ind3, w1)
+        d2 = self.decode2(d3, out2, ind2, w2)
+        d1 = self.decode3(d2, out1, ind1, w3)
         prob = self.classifier.forward(d1)
 
         return prob
+
+
+class FewShotSegmentor(nn.Module):
+    '''
+    Class Combining Conditioner and Segmentor for few shot learning
+    '''
+
+    def __init__(self, params):
+        super(FewShotSegmentor).__init__()
+        self.conditioner = Conditioner(params)
+        self.segmentor = Segmentor(params)
+
+    def forward(self, input1, input2):
+        weights = self.conditioner(input1)
+        segment = self.segmentor(input2, weights)
+        return segment
 
     def enable_test_dropout(self):
         attr_dict = self.__dict__['_modules']

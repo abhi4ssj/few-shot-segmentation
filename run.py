@@ -4,7 +4,7 @@ import os
 import torch
 
 import utils.evaluator as eu
-from quicknat import QuickNat
+from few_shot_segmentor import QuickNat
 from settings import Settings
 from solver import Solver
 from utils.data_utils import get_imdb_dataset
