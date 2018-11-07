@@ -49,16 +49,15 @@ class Segmentor(nn.Module):
         'stride_conv':1,
         'pool':2,
         'stride_pool':2,
-        'num_classes':28
-        'se_block': False,
-        'drop_out':0.2
+        'num_classes':1
+        'se_block': True,
+        'drop_out':0
     }
 
     """
 
     def __init__(self, params):
         super(Segmentor, self).__init__()
-        self.weights = weights
         self.encode1 = sm.EncoderBlock(params)
         params['num_channels'] = 64
         self.encode2 = sm.EncoderBlock(params)
@@ -70,10 +69,11 @@ class Segmentor(nn.Module):
         self.decode3 = sm.DecoderBlock(params)
         params['num_channels'] = 64
         self.classifier = sm.ClassifierBlock(params)
+        self.sigmoid = nn.Sigmoid()
 
-    def forward(self, input, weights=None):
+    def forward(self, inpt, weights=None):
         w1, w2, w3 = weights if weights else (None, None, None)
-        e1, out1, ind1 = self.encode1(input)
+        e1, out1, ind1 = self.encode1(inpt)
         e2, out2, ind2 = self.encode2(e1)
         e3, out3, ind3 = self.encode3(e2)
 
@@ -82,7 +82,8 @@ class Segmentor(nn.Module):
         d3 = self.decode1(bn, out3, ind3, w1)
         d2 = self.decode2(d3, out2, ind2, w2)
         d1 = self.decode3(d2, out1, ind1, w3)
-        prob = self.classifier.forward(d1)
+        logit = self.classifier.forward(d1)
+        prob = self.sigmoid(logit)
 
         return prob
 

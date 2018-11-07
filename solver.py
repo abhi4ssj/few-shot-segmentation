@@ -1,5 +1,4 @@
 import os
-
 import numpy as np
 import torch
 from nn_additional_losses import losses as additional_losses
@@ -7,6 +6,7 @@ from torch.optim import lr_scheduler
 
 from utils.log_utils import LogWriter
 import utils.common_utils as common_utils
+
 
 CHECKPOINT_FILE_NAME = 'checkpoint.pth.tar'
 
@@ -21,7 +21,7 @@ class Solver(object):
                  optim=torch.optim.Adam,
                  optim_args={},
                  loss_func=additional_losses.CombinedLoss(),
-                 model_name='quicknat',
+                 model_name='FewShotSegmentor',
                  labels=None,
                  num_epochs=10,
                  log_nth=5,
@@ -58,6 +58,10 @@ class Solver(object):
         self.start_iteration = 1
         if use_last_checkpoint:
             self.load_checkpoint()
+
+
+
+
 
     # TODO:Need to correct the CM and dice score calculation.
     def train(self, train_loader, val_loader):
