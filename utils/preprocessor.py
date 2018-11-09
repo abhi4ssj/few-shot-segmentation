@@ -12,7 +12,7 @@ def rotate_orientation(volume_data, volume_label, orientation=ORIENTATION['coron
         return volume_data.transpose((2, 0, 1)), volume_label.transpose((2, 0, 1))
     elif orientation == ORIENTATION['axial']:
         return volume_data.transpose((1, 2, 0)), volume_label.transpose((1, 2, 0))
-    elif orientation == ORIENTATION['sagital']:
+    elif orientation == ORIENTATION['sagittal']:
         return volume_data, volume_label
     else:
         raise ValueError("Invalid value for orientation. Pleas see help")
