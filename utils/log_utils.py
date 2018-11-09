@@ -8,7 +8,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from tensorboardX import SummaryWriter
-
+import torch
 import evaluator as eu
 
 plt.switch_backend('agg')
@@ -86,8 +86,10 @@ class LogWriter(object):
 
     def dice_score_per_epoch(self, phase, output, correct_labels, epoch):
         print("Dice Score...", end='', flush=True)
-        ds = eu.dice_score_perclass(output, correct_labels, self.num_class)
-        self.plot_dice_score(phase, 'dice_score_per_epoch', ds, 'Dice Score', epoch)
+        # TODO: multiclass vs binary
+        ds = eu.dice_score_binary(output, correct_labels, self.num_class)
+        print('Dice score is '+str(ds))
+        # self.plot_dice_score(phase, 'dice_score_per_epoch', ds, 'Dice Score', epoch)
 
         print("DONE", flush=True)
 
@@ -123,10 +125,10 @@ class LogWriter(object):
         fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(10, 20))
 
         for i in range(nrows):
-            ax[i][0].imshow(prediction[i], cmap='CMRmap', vmin=0, vmax=self.num_class - 1)
+            ax[i][0].imshow(torch.squeeze(prediction[i]), cmap='CMRmap', vmin=0, vmax=1)
             ax[i][0].set_title("Predicted", fontsize=10, color="blue")
             ax[i][0].axis('off')
-            ax[i][1].imshow(ground_truth[i], cmap='CMRmap', vmin=0, vmax=self.num_class - 1)
+            ax[i][1].imshow(torch.squeeze(ground_truth[i]), cmap='CMRmap', vmin=0, vmax=1)
             ax[i][1].set_title("Ground Truth", fontsize=10, color="blue")
             ax[i][1].axis('off')
         fig.set_tight_layout(True)

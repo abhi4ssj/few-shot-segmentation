@@ -1,12 +1,11 @@
 import os
 
 import h5py
-import nibabel as nb
 import numpy as np
 import torch
 import torch.utils.data as data
 import scipy.io as sio
-
+# import preprocessor as preprocessor
 import utils.preprocessor as preprocessor
 
 
@@ -129,3 +128,14 @@ def load_file_paths(data_dir, label_dir, volumes_txt_file=None):
     file_paths = [os.path.join(data_dir, vol) for vol in volumes_to_use]
 
     return file_paths
+
+
+def split_batch(X, y, query_label):
+    batch_size = len(X) // 2
+    input1 = X[0:batch_size, :, :, :]
+    input2 = X[batch_size:, :, :, :]
+    y1 = (y[0:batch_size, :, :] == query_label).type(torch.FloatTensor)
+    y2 = (y[batch_size:, :, :] == query_label).type(torch.FloatTensor)
+    y2 = y2.unsqueeze(1)
+    input1 = torch.cat([input1, y1.unsqueeze(1)], dim=1)
+    return input1, input2, y2

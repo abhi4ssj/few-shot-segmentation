@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from nn_common_modules import modules as sm
+from data_utils import split_batch
 
 
 class Conditioner(nn.Module):
@@ -19,7 +20,7 @@ class Conditioner(nn.Module):
         params['num_channels'] = 64
         self.genblock2 = sm.GenericBlock(params)
         self.genblock3 = sm.GenericBlock(params)
-        self.maxpool = nn.MaxPool2d(kernel_size=params['pool'], stride=params['stride_pool'], return_indices=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=params['pool'], stride=params['stride_pool'])
         self.tanh = nn.Tanh()
 
     def forward(self, input):
@@ -29,11 +30,14 @@ class Conditioner(nn.Module):
         o4 = self.maxpool(o3)
         o5 = self.genblock3(o4)
         batch_size, num_channels, H, W = o1.size()
-        o6 = self.tanh(o1.view(batch_size, num_channels, -1).mean(dim=2))
+        o6 = o1.view(batch_size, num_channels, -1).mean(dim=2)
+        # o6 = self.tanh(o1.view(batch_size, num_channels, -1).mean(dim=2))
         batch_size, num_channels, H, W = o3.size()
-        o7 = self.tanh(o3.view(batch_size, num_channels, -1).mean(dim=2))
+        o7 = o3.view(batch_size, num_channels, -1).mean(dim=2)
+        # o7 = self.tanh(o3.view(batch_size, num_channels, -1).mean(dim=2))
         batch_size, num_channels, H, W = o5.size()
-        o8 = self.tanh(o5.view(batch_size, num_channels, -1).mean(dim=2))
+        o8 = o5.view(batch_size, num_channels, -1).mean(dim=2)
+        # o8 = self.tanh(o5.view(batch_size, num_channels, -1).mean(dim=2))
         return o6, o7, o8
 
 
@@ -58,6 +62,7 @@ class Segmentor(nn.Module):
 
     def __init__(self, params):
         super(Segmentor, self).__init__()
+        params['num_channels'] = 1
         self.encode1 = sm.EncoderBlock(params)
         params['num_channels'] = 64
         self.encode2 = sm.EncoderBlock(params)
@@ -94,7 +99,7 @@ class FewShotSegmentor(nn.Module):
     '''
 
     def __init__(self, params):
-        super(FewShotSegmentor).__init__()
+        super(FewShotSegmentor, self).__init__()
         self.conditioner = Conditioner(params)
         self.segmentor = Segmentor(params)
 
@@ -128,27 +133,33 @@ class FewShotSegmentor(nn.Module):
         print('Saving model... %s' % path)
         torch.save(self, path)
 
-    def predict(self, X, device=0, enable_dropout=False):
+    def predict(self, X, y, query_label, device=0, enable_dropout=False):
         """
         Predicts the outout after the model is trained.
         Inputs:
         - X: Volume to be predicted
         """
         self.eval()
-
-        if type(X) is np.ndarray:
-            X = torch.tensor(X, requires_grad=False).type(torch.FloatTensor).cuda(device, non_blocking=True)
-        elif type(X) is torch.Tensor and not X.is_cuda:
-            X = X.type(torch.FloatTensor).cuda(device, non_blocking=True)
+        input1, input2, y2 = split_batch(X, y, query_label)
+        input1, input2, y2 = to_cuda(input1, device), to_cuda(input2, device), to_cuda(y2, device)
 
         if enable_dropout:
             self.enable_test_dropout()
 
         with torch.no_grad():
-            out = self.forward(X)
+            out = self.forward(input1, input2)
 
-        max_val, idx = torch.max(out, 1)
+        # max_val, idx = torch.max(out, 1)
+        idx = out > 0.5
         idx = idx.data.cpu().numpy()
         prediction = np.squeeze(idx)
-        del X, out, idx, max_val
+        del X, out, idx
         return prediction
+
+
+def to_cuda(X, device):
+    if type(X) is np.ndarray:
+        X = torch.tensor(X, requires_grad=False).type(torch.FloatTensor).cuda(device, non_blocking=True)
+    elif type(X) is torch.Tensor and not X.is_cuda:
+        X = X.type(torch.FloatTensor).cuda(device, non_blocking=True)
+    return X

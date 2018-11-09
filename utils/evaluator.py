@@ -8,6 +8,18 @@ import utils.common_utils as common_utils
 import utils.data_utils as du
 
 
+def dice_score_binary(vol_output, ground_truth, no_samples=10, mode='train'):
+    ground_truth = ground_truth.type(torch.FloatTensor)
+    vol_output = vol_output.type(torch.FloatTensor)
+    if mode == 'train':
+        samples = np.random.choice(len(vol_output), no_samples)
+        vol_output, ground_truth = vol_output[samples], ground_truth[samples]
+        inter = 2*torch.sum(torch.mul(ground_truth, vol_output))
+        union = torch.sum(ground_truth) + torch.sum(vol_output) + 0.0001
+
+    return torch.mean(torch.div(inter, union))
+
+
 def dice_confusion_matrix(vol_output, ground_truth, num_classes, no_samples=10, mode='train'):
     dice_cm = torch.zeros(num_classes, num_classes)
     if mode == 'train':

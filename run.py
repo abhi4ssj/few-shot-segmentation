@@ -4,11 +4,12 @@ import os
 import torch
 
 import utils.evaluator as eu
-from few_shot_segmentor import QuickNat
+from few_shot_segmentor import FewShotSegmentor
 from settings import Settings
 from solver import Solver
 from utils.data_utils import get_imdb_dataset
 from utils.log_utils import LogWriter
+from utils.shot_batch_sampler import OneShotBatchSampler
 
 torch.set_default_tensor_type('torch.FloatTensor')
 
@@ -24,14 +25,15 @@ def load_data(data_params):
 def train(train_params, common_params, data_params, net_params):
     train_data, test_data = load_data(data_params)
 
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=train_params['train_batch_size'], shuffle=True,
-                                               num_workers=4, pin_memory=True)
-    val_loader = torch.utils.data.DataLoader(test_data, batch_size=train_params['val_batch_size'], shuffle=False,
-                                             num_workers=4, pin_memory=True)
+    train_sampler = OneShotBatchSampler(train_data.y, 'train', 5, iteration=100)
+    test_sampler = OneShotBatchSampler(test_data.y, 'val', 5, iteration=100)
 
-    quicknat_model = QuickNat(net_params)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_sampler=train_sampler)
+    val_loader = torch.utils.data.DataLoader(test_data, batch_sampler=test_sampler)
 
-    solver = Solver(quicknat_model,
+    few_shot_model = FewShotSegmentor(net_params)
+
+    solver = Solver(few_shot_model,
                     device=common_params['device'],
                     num_class=net_params['num_class'],
                     optim_args={"lr": train_params['learning_rate'],
@@ -51,7 +53,7 @@ def train(train_params, common_params, data_params, net_params):
 
     solver.train(train_loader, val_loader)
     final_model_path = os.path.join(common_params['save_model_dir'], train_params['final_model_file'])
-    quicknat_model.save(final_model_path)
+    few_shot_model.save(final_model_path)
     print("final model saved @ " + str(final_model_path))
 
 
