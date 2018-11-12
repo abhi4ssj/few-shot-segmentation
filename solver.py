@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import torch
-# from nn_additional_losses import losses as additional_losses
+from nn_additional_losses import losses
 from torch.optim import lr_scheduler
 import torch.nn as nn
 from utils.log_utils import LogWriter
@@ -22,7 +22,7 @@ class Solver(object):
                  num_class,
                  optim=torch.optim.Adam,
                  optim_args={},
-                 loss_func=nn.BCELoss(),
+                 loss_func=losses.DiceLossBinary(),
                  model_name='FewShotSegmentor',
                  labels=None,
                  num_epochs=10,
@@ -89,8 +89,12 @@ class Solver(object):
             for phase in ['train', 'val']:
                 print("<<<= Phase: %s =>>>" % phase)
                 loss_arr = []
-                out_list = []
+                input_img_list = []
                 y_list = []
+                out_list = []
+                condition_input_img_list = []
+                condition_y_list = []
+
                 if phase == 'train':
                     model.train()
                     scheduler.step()
@@ -104,14 +108,16 @@ class Solver(object):
 
                     # TODO: split x,y in input1,input2, label
                     query_label = int(dataloaders[phase].batch_sampler.query_label)
-                    input1, input2, y2 = split_batch(X, y, query_label)
+                    print(current_iteration, query_label)
+                    input1, input2, y1,  y2 = split_batch(X, y, query_label)
+                    condition_input = torch.mul(input1, y1.unsqueeze(1))
                     # plot_img(input2[0].squeeze().data, input1[0,0,:,:].squeeze().data, y2[0].squeeze().data, input1[0,1,:,:].squeeze().data)
                     if model.is_cuda:
-                        input1, input2, y2 = input1.cuda(self.device, non_blocking=True), input2.cuda(self.device,
+                        condition_input, input2, y2 = condition_input.cuda(self.device, non_blocking=True), input2.cuda(self.device,
                                                                                                       non_blocking=True), y2.cuda(
                             self.device, non_blocking=True)
 
-                    output = model(input1, input2)
+                    output = model(condition_input, input2)
                     # TODO: add weights
                     loss = self.loss_func(output, y2)
                     if phase == 'train':
@@ -128,9 +134,12 @@ class Solver(object):
                     batch_output = output > 0.5
 
                     out_list.append(batch_output.cpu())
+                    input_img_list.append(input2.cpu())
                     y_list.append(y2.cpu())
+                    condition_input_img_list.append(input1.cpu())
+                    condition_y_list.append(y1)
                     # del X, y, w, output, loss
-                    del X, y, w, output, batch_output, loss
+                    del X, y, w, output, batch_output, loss, input1, input2, y2
                     torch.cuda.empty_cache()
                     if phase == 'val':
                         if i_batch != len(dataloaders[phase]) - 1:
@@ -139,10 +148,15 @@ class Solver(object):
                             print("100%", flush=True)
 
                 with torch.no_grad():
-                    out_arr, y_arr = torch.cat(out_list), torch.cat(y_list)
+                    input_img_arr =  torch.cat(input_img_list)
+                    y_arr = torch.cat(y_list)
+                    out_arr = torch.cat(out_list)
+                    condition_input_img_arr = torch.cat(condition_input_img_list)
+                    condition_y_arr = torch.cat(condition_y_list)
+
                     self.logWriter.loss_per_epoch(loss_arr, phase, epoch)
                     index = np.random.choice(len(out_arr), 3, replace=False)
-                    self.logWriter.image_per_epoch(out_arr[index], y_arr[index], phase, epoch)
+                    self.logWriter.image_per_epoch(out_arr[index], y_arr[index], phase, epoch, additional_image=(input_img_arr, condition_input_img_arr, condition_y_arr))
                     self.logWriter.dice_score_per_epoch(phase, out_arr, y_arr, epoch)
 
             print("==== Epoch [" + str(epoch) + " / " + str(self.num_epochs) + "] DONE ====")

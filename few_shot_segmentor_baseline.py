@@ -16,7 +16,7 @@ class Conditioner(nn.Module):
 
     def __init__(self, params):
         super(Conditioner, self).__init__()
-        params['num_channels'] = 2
+        params['num_channels'] = 1
         self.genblock1 = sm.GenericBlock(params)
         params['num_channels'] = 64
         self.genblock2 = sm.GenericBlock(params)
@@ -31,15 +31,15 @@ class Conditioner(nn.Module):
         o4 = self.maxpool(o3)
         o5 = self.genblock3(o4)
         batch_size, num_channels, H, W = o1.size()
-        o6 = o1.view(batch_size, num_channels, -1).mean(dim=2)
+        # o6 = o1.view(batch_size, num_channels, -1).mean(dim=2)
         # o6 = self.tanh(o1.view(batch_size, num_channels, -1).mean(dim=2))
         batch_size, num_channels, H, W = o3.size()
-        o7 = o3.view(batch_size, num_channels, -1).mean(dim=2)
+        # o7 = o3.view(batch_size, num_channels, -1).mean(dim=2)
         # o7 = self.tanh(o3.view(batch_size, num_channels, -1).mean(dim=2))
         batch_size, num_channels, H, W = o5.size()
         o8 = o5.view(batch_size, num_channels, -1).mean(dim=2)
         # o8 = self.tanh(o5.view(batch_size, num_channels, -1).mean(dim=2))
-        return o6, o7, o8
+        return o8
 
 
 class Segmentor(nn.Module):
@@ -78,29 +78,29 @@ class Segmentor(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, inpt, weights=None):
-        w1, w2, w3 = weights if weights else (None, None, None)
+        w1 = weights
         e1, out1, ind1 = self.encode1(inpt)
         e2, out2, ind2 = self.encode2(e1)
         e3, out3, ind3 = self.encode3(e2)
 
         bn = self.bottleneck.forward(e3)
 
-        d3 = self.decode1(bn, out3, ind3, w1)
-        d2 = self.decode2(d3, out2, ind2, w2)
-        d1 = self.decode3(d2, out1, ind1, w3)
-        logit = self.classifier.forward(d1)
+        d3 = self.decode1(bn, out3, ind3)
+        d2 = self.decode2(d3, out2, ind2)
+        d1 = self.decode3(d2, out1, ind1)
+        logit = self.classifier.forward(d1, w1)
         prob = self.sigmoid(logit)
 
         return prob
 
 
-class FewShotSegmentor(nn.Module):
+class FewShotSegmentorBaseLine(nn.Module):
     '''
     Class Combining Conditioner and Segmentor for few shot learning
     '''
 
     def __init__(self, params):
-        super(FewShotSegmentor, self).__init__()
+        super(FewShotSegmentorBaseLine, self).__init__()
         self.conditioner = Conditioner(params)
         self.segmentor = Segmentor(params)
 

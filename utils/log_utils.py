@@ -88,7 +88,7 @@ class LogWriter(object):
         print("Dice Score...", end='', flush=True)
         # TODO: multiclass vs binary
         ds = eu.dice_score_binary(output, correct_labels, self.num_class)
-        print('Dice score is '+str(ds))
+        print('Dice score is ' + str(ds))
         # self.plot_dice_score(phase, 'dice_score_per_epoch', ds, 'Dice Score', epoch)
 
         print("DONE", flush=True)
@@ -118,19 +118,29 @@ class LogWriter(object):
         ax.xaxis.tick_bottom()
         self.writer['val'].add_figure(caption, fig)
 
-    def image_per_epoch(self, prediction, ground_truth, phase, epoch):
+    def image_per_epoch(self, prediction, ground_truth, phase, epoch, additional_image=None):
         print("Sample Images...", end='', flush=True)
-        ncols = 2
+        ncols = 5
         nrows = len(prediction)
+
         fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(10, 20))
 
         for i in range(nrows):
-            ax[i][0].imshow(torch.squeeze(prediction[i]), cmap='CMRmap', vmin=0, vmax=1)
-            ax[i][0].set_title("Predicted", fontsize=10, color="blue")
+            ax[i][0].imshow(torch.squeeze(additional_image[0][i]), cmap='gray', vmin=0, vmax=1)
+            ax[i][0].set_title("Input Image", fontsize=10, color="blue")
             ax[i][0].axis('off')
-            ax[i][1].imshow(torch.squeeze(ground_truth[i]), cmap='CMRmap', vmin=0, vmax=1)
+            ax[i][1].imshow(torch.squeeze(ground_truth[i]), cmap='gray', vmin=0, vmax=1)
             ax[i][1].set_title("Ground Truth", fontsize=10, color="blue")
             ax[i][1].axis('off')
+            ax[i][2].imshow(torch.squeeze(prediction[i]), cmap='gray', vmin=0, vmax=1)
+            ax[i][2].set_title("Predicted", fontsize=10, color="blue")
+            ax[i][2].axis('off')
+            ax[i][3].imshow(torch.squeeze(additional_image[1][i]), cmap='gray', vmin=0, vmax=1)
+            ax[i][3].set_title("Condition Input", fontsize=10, color="blue")
+            ax[i][3].axis('off')
+            ax[i][4].imshow(torch.squeeze(additional_image[2][i]), cmap='gray', vmin=0, vmax=1)
+            ax[i][4].set_title("Condition Label", fontsize=10, color="blue")
+            ax[i][4].axis('off')
         fig.set_tight_layout(True)
         self.writer[phase].add_figure('sample_prediction/' + phase, fig, epoch)
         print('DONE', flush=True)
