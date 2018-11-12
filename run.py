@@ -5,6 +5,7 @@ import torch
 
 import utils.evaluator as eu
 from few_shot_segmentor import FewShotSegmentor
+from few_shot_segmentor_baseline import FewShotSegmentorBaseLine
 from settings import Settings
 from solver import Solver
 from utils.data_utils import get_imdb_dataset
@@ -25,13 +26,14 @@ def load_data(data_params):
 def train(train_params, common_params, data_params, net_params):
     train_data, test_data = load_data(data_params)
 
-    train_sampler = OneShotBatchSampler(train_data.y, 'train', 5, iteration=100)
-    test_sampler = OneShotBatchSampler(test_data.y, 'val', 5, iteration=100)
+    train_sampler = OneShotBatchSampler(train_data.y, 'train', 1, iteration=10)
+    test_sampler = OneShotBatchSampler(test_data.y, 'val', 1, iteration=10)
 
     train_loader = torch.utils.data.DataLoader(train_data, batch_sampler=train_sampler)
     val_loader = torch.utils.data.DataLoader(test_data, batch_sampler=test_sampler)
 
-    few_shot_model = FewShotSegmentor(net_params)
+    # few_shot_model = FewShotSegmentor(net_params)
+    few_shot_model = FewShotSegmentorBaseLine(net_params)
 
     solver = Solver(few_shot_model,
                     device=common_params['device'],
