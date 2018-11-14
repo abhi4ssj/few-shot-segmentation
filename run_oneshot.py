@@ -2,12 +2,13 @@ import argparse
 import os
 
 import torch
+import torch.nn as nn
 
 import utils.evaluator as eu
-from few_shot_segmentor import FewShotSegmentor, Segmentor
+from few_shot_segmentor import Segmentor
 from few_shot_segmentor_baseline import FewShotSegmentorBaseLine
 from settings import Settings
-from solver import Solver
+from solver_oneshot import Solver
 from utils.data_utils import get_imdb_dataset
 from utils.log_utils import LogWriter
 from utils.shot_batch_sampler import OneShotBatchSampler
@@ -23,39 +24,35 @@ def load_data(data_params):
     return train_data, test_data
 
 
+class Identity(nn.Module):
+    def __init__(self):
+        super(Identity, self).__init__()
+
+    def forward(self, x):
+        return x
+
+
 def train(train_params, common_params, data_params, net_params):
     train_data, test_data = load_data(data_params)
-    # TODO: Only for segmentor
-    train_data.y[train_data.y == 6] = 0
-    train_data.y[train_data.y == 7] = 0
-    train_data.y[train_data.y == 5] = 4
-    train_data.y[train_data.y == 8] = 5
-    train_data.y[train_data.y == 9] = 5
 
-    test_data.y[test_data.y == 6] = 0
-    test_data.y[test_data.y == 7] = 0
-    test_data.y[test_data.y == 5] = 4
-    test_data.y[test_data.y == 8] = 5
-    test_data.y[test_data.y == 9] = 5
+    train_sampler = OneShotBatchSampler(train_data.y, 'train', train_params['train_batch_size'],
+                                        iteration=train_params['iterations'])
+    test_sampler = OneShotBatchSampler(test_data.y, 'val', train_params['val_batch_size'],
+                                       iteration=train_params['test_iterations'])
 
-    # train_sampler = OneShotBatchSampler(train_data.y, 'train', train_params['train_batch_size'],
-    #                                     iteration=train_params['iterations'])
-    # test_sampler = OneShotBatchSampler(test_data.y, 'val', train_params['val_batch_size'],
-    #                                    iteration=train_params['iterations'])
+    train_loader = torch.utils.data.DataLoader(train_data, batch_sampler=train_sampler)
+    val_loader = torch.utils.data.DataLoader(test_data, batch_sampler=test_sampler)
 
-    # TODO: Change for one shot Learning
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=train_params['train_batch_size'], shuffle=True,
-                                               num_workers=4, pin_memory=True)
-    val_loader = torch.utils.data.DataLoader(test_data, batch_size=train_params['val_batch_size'], shuffle=False,
-                                             num_workers=4, pin_memory=True)
+    # segmentor_pretrained = torch.load(train_params['pre_trained_path'])
+    #
+    # segmentor_pretrained.classifier = Identity()
+    # segmentor_pretrained.sigmoid = Identity()
 
+    # for param in segmentor_pretrained.parameters():
+    #     param.requires_grad = False
 
-
-    # train_loader = torch.utils.data.DataLoader(train_data, batch_sampler=train_sampler)
-    # val_loader = torch.utils.data.DataLoader(test_data, batch_sampler=test_sampler)
-
-    few_shot_model = Segmentor(net_params)
-    # few_shot_model = FewShotSegmentorBaseLine(net_params)
+    few_shot_model = FewShotSegmentorBaseLine(net_params)
+    # few_shot_model.segmentor = segmentor_pretrained
 
     solver = Solver(few_shot_model,
                     device=common_params['device'],

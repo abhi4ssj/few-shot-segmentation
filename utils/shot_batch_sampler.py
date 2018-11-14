@@ -4,15 +4,26 @@ import numpy as np
 def get_lab_list(phase):
     lab_list = []
     if phase == 'train':
-        # lab_list = [0, 1, 2, 3, 4, 5, 6]
-        lab_list = [1, 4]
+        lab_list = [1, 2, 4, 5, 8, 9]
+        # lab_list = [4, 5, 6, 7]
     elif phase == 'val':
-        lab_list = [5]
+        lab_list = [6, 7]
     return lab_list
 
 
+#
+def get_class_slices(labels, i):
+    num_slices, H, W = labels.shape
+    thresh = 0.01
+    total_slices = labels == i
+    pixel_sum = np.sum(total_slices, axis=(1, 2)).squeeze()
+    pixel_sum = pixel_sum / (H * W)
+    threshold_list = [idx for idx, slice in enumerate(pixel_sum) if slice > thresh]
+    return threshold_list
+
+
 def get_index_dict(labels, lab_list):
-    index_list = {i: np.unique((labels == i).nonzero()[0]) for i in lab_list}
+    index_list = {i: get_class_slices(labels, i) for i in lab_list}
     p = [1 - (len(val) / len(labels)) for val in index_list.values()]
     p = p / np.sum(p)
     return index_list, p
@@ -22,7 +33,7 @@ class OneShotBatchSampler:
     '''
 
     '''
-    
+
     def _gen_query_label(self):
         """
         Returns a query label uniformly from the label list of current phase. Also returns indexes of the slices which contain that label
@@ -37,6 +48,12 @@ class OneShotBatchSampler:
 
         '''
         super(OneShotBatchSampler, self).__init__()
+
+        # TODO: Improve
+        # labels[labels == 5] = 4
+        # labels[labels == 7] = 6
+        # labels[labels == 9] = 8
+
         self.index_list = None
         self.query_label = None
         self.batch_size = batch_size
@@ -62,8 +79,6 @@ class OneShotBatchSampler:
             raise StopIteration
 
         self.query_label = self._gen_query_label()
-        print("inside sampler")
-        print(self.query_label)
         self.index_list = self.index_dict[self.query_label]
         batch = np.random.choice(self.index_list, size=2 * self.batch_size)
         self.n += 1
@@ -76,3 +91,4 @@ class OneShotBatchSampler:
         """
 
         return self.iteration
+

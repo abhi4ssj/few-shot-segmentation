@@ -22,8 +22,8 @@ class Solver(object):
                  num_class,
                  optim=torch.optim.Adam,
                  optim_args={},
-                 loss_func=losses.CombinedLoss(),
-                 model_name='Segmentor',
+                 loss_func=losses.DiceLossBinary(),
+                 model_name='OneShotSegmentor',
                  labels=None,
                  num_epochs=10,
                  log_nth=5,
@@ -43,6 +43,9 @@ class Solver(object):
             self.loss_func = loss_func.cuda(device)
         else:
             self.loss_func = loss_func
+
+        #self.optim = optim([{'params': model.conditioner.parameters(), 'lr': 1e-3},
+        #                   {'params': model.classifier.parameters(), 'lr': 1e-3}], **optim_args)
         self.optim = optim(model.parameters(), **optim_args)
         self.scheduler = lr_scheduler.StepLR(self.optim, step_size=lr_scheduler_step_size,
                                              gamma=lr_scheduler_gamma)
@@ -103,31 +106,24 @@ class Solver(object):
                 else:
                     model.eval()
                 for i_batch, sampled_batch in enumerate(data_loader[phase]):
-                    X = sampled_batch[0].type(torch.FloatTensor).cuda(
+                    X = sampled_batch[0].type(torch.FloatTensor)
+                    y = sampled_batch[1].type(torch.LongTensor)
+                    w = sampled_batch[2].type(torch.FloatTensor)
+
+                    query_label = data_loader[phase].batch_sampler.query_label
+
+                    input1, input2, y1, y2 = split_batch(X, y, int(query_label))
+                    condition_input = torch.mul(input1, y1.unsqueeze(1))
+
+                    if model.is_cuda:
+                        condition_input, input2, y2 = condition_input.cuda(self.device, non_blocking=True), input2.cuda(
+                            self.device,
+                            non_blocking=True), y2.cuda(
                             self.device, non_blocking=True)
-                    y = sampled_batch[1].type(torch.LongTensor).cuda(
-                            self.device, non_blocking=True)
-                    w = sampled_batch[2].type(torch.FloatTensor).cuda(
-                            self.device, non_blocking=True)
 
-                    # query_label = data_loader[phase].batch_sampler.query_label
-                    #
-                    # input1, input2, y1, y2 = split_batch(X, y, int(query_label))
-                    # condition_input = torch.mul(input1, y1.unsqueeze(1))
-
-
-                    # plot_img(input2[0].squeeze().data, input1[0,0,:,:].squeeze().data, y2[0].squeeze().data, input1[0,1,:,:].squeeze().data)
-                    # if model.is_cuda:
-                    #     condition_input, input2, y2 = condition_input.cuda(self.device, non_blocking=True), input2.cuda(
-                    #         self.device,
-                    #         non_blocking=True), y2.cuda(
-                    #         self.device, non_blocking=True)
-
-                    # output = model(condition_input, input2)
-                    output = model(X)
+                    output = model(condition_input, input2)
                     # TODO: add weights
-                    # loss = self.loss_func(output, y2)
-                    loss = self.loss_func(output, y, w)
+                    loss = self.loss_func(output, y2)
                     if phase == 'train':
                         optim.zero_grad()
                         loss.backward()
@@ -138,17 +134,15 @@ class Solver(object):
 
                     loss_arr.append(loss.item())
 
-                    _, batch_output = torch.max(output, dim=1)
-                    # batch_output = output > 0.5
+                    batch_output = output > 0.5
 
                     out_list.append(batch_output.cpu())
-                    # input_img_list.append(input2.cpu())
-                    y_list.append(y.cpu())
-                    # condition_input_img_list.append(input1.cpu())
-                    # condition_y_list.append(y1)
-                    # del X, y, w, output, loss
-                    del X, y, w, output, batch_output, loss
-                        # input1, input2, y2
+                    input_img_list.append(input2.cpu())
+                    y_list.append(y2.cpu())
+                    condition_input_img_list.append(input1.cpu())
+                    condition_y_list.append(y1)
+
+                    del X, y, w, output, batch_output, loss, input1, input2, y2
                     torch.cuda.empty_cache()
                     if phase == 'val':
                         if i_batch != len(data_loader[phase]) - 1:
@@ -157,17 +151,16 @@ class Solver(object):
                             print("100%", flush=True)
 
                 with torch.no_grad():
-                    # input_img_arr = torch.cat(input_img_list)
+                    input_img_arr = torch.cat(input_img_list)
                     y_arr = torch.cat(y_list)
                     out_arr = torch.cat(out_list)
-                    # condition_input_img_arr = torch.cat(condition_input_img_list)
-                    # condition_y_arr = torch.cat(condition_y_list)
+                    condition_input_img_arr = torch.cat(condition_input_img_list)
+                    condition_y_arr = torch.cat(condition_y_list)
 
                     self.logWriter.loss_per_epoch(loss_arr, phase, epoch)
                     index = np.random.choice(len(out_arr), 3, replace=False)
-                    # self.logWriter.image_per_epoch(out_arr[index], y_arr[index], phase, epoch, additional_image=(
-                    #     input_img_arr[index], condition_input_img_arr[index], condition_y_arr[index]))
-                    self.logWriter.image_per_epoch(out_arr[index], y_arr[index], phase, epoch)
+                    self.logWriter.image_per_epoch(out_arr[index], y_arr[index], phase, epoch, additional_image=(
+                        input_img_arr[index], condition_input_img_arr[index], condition_y_arr[index]))
                     self.logWriter.dice_score_per_epoch(phase, out_arr, y_arr, epoch)
 
             print("==== Epoch [" + str(epoch) + " / " + str(self.num_epochs) + "] DONE ====")
@@ -204,17 +197,3 @@ class Solver(object):
             print("=> loaded checkpoint '{}' (epoch {})".format(self.checkpoint_path, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(self.checkpoint_path))
-
-# def plot_img(data1=None, data2=None, label1=None, label2=None):
-#     print(plt.get_backend())
-#     fig = plt.figure()
-#     plt.subplot(1,4,1)
-#     plt.imshow(data1, cmap='gray')
-#     plt.subplot(1, 4, 2)
-#     plt.imshow(data2, cmap='gray')
-#     plt.subplot(1,4,3)
-#     plt.imshow(label1)
-#     plt.subplot(1, 4, 4)
-#     plt.imshow(label2)
-#     plt.ioff()
-#     plt.show()

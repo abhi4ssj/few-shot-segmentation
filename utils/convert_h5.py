@@ -4,7 +4,7 @@ Sample command to create new dataset - python utils/convert_h5.py -dd /home/mast
 
                                      - python utils/convert_h5.py -dd /home/masterthesis/shayan/nas_drive/Data_Neuro/IXI/IXI_FS -ld /home/masterthesis/shayan/nas_drive/Data_Neuro/IXI/IXI_FS -ds 98,2 -rc FS -o COR -df datasets/IXI/coronal
 
-                                     - python3.6 utils/convert_h5.py -dd /home/deeplearning/Abhijit/nas_drive/Abhijit/WholeBody/CT_ce/Data/Visceral -ld /home/deeplearning/Abhijit/nas_drive/Abhijit/WholeBody/CT_ce/Data/Visceral -trv datasets/train_volumes.txt -tev datasets/test_volumes.txt -rc WholeBody -o SAG -df datasets/coronal
+                                     - python3.6 utils/convert_h5.py -dd /home/deeplearning/Abhijit/nas_drive/Abhijit/WholeBody/CT_ce/Data/SilverCorpus -ld /home/deeplearning/Abhijit/nas_drive/Abhijit/WholeBody/CT_ce/Data/SilverCorpus -trv datasets/test_volumes_silver.txt -tev datasets/test_volumes_silver.txt -rc WholeBody -o AXI -df datasets/silver_corpus
 """
 
 import argparse
