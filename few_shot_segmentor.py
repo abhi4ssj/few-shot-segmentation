@@ -16,7 +16,7 @@ class Conditioner(nn.Module):
 
     def __init__(self, params):
         super(Conditioner, self).__init__()
-        params['num_channels'] = 2
+        params['num_channels'] = 1
         self.genblock1 = sm.GenericBlock(params)
         params['num_channels'] = 64
         self.genblock2 = sm.GenericBlock(params)
@@ -31,13 +31,13 @@ class Conditioner(nn.Module):
         o4 = self.maxpool(o3)
         o5 = self.genblock3(o4)
         batch_size, num_channels, H, W = o1.size()
-        o6 = o1.view(batch_size, num_channels, -1).mean(dim=2)
+        o6, _ = o1.view(batch_size, num_channels, -1).max(dim=2)
         # o6 = self.tanh(o1.view(batch_size, num_channels, -1).mean(dim=2))
         batch_size, num_channels, H, W = o3.size()
-        o7 = o3.view(batch_size, num_channels, -1).mean(dim=2)
+        o7, _ = o3.view(batch_size, num_channels, -1).max(dim=2)
         # o7 = self.tanh(o3.view(batch_size, num_channels, -1).mean(dim=2))
         batch_size, num_channels, H, W = o5.size()
-        o8 = o5.view(batch_size, num_channels, -1).mean(dim=2)
+        o8, _ = o5.view(batch_size, num_channels, -1).max(dim=2)
         # o8 = self.tanh(o5.view(batch_size, num_channels, -1).mean(dim=2))
         return o6, o7, o8
 
@@ -70,9 +70,9 @@ class Segmentor(nn.Module):
         self.encode3 = sm.EncoderBlock(params)
         self.bottleneck = sm.DenseBlock(params)
         params['num_channels'] = 128
-        self.decode1 = sm.DecoderBlock(params, se_block_type=se.SELayer.SSE)
-        self.decode2 = sm.DecoderBlock(params, se_block_type=se.SELayer.SSE)
-        self.decode3 = sm.DecoderBlock(params, se_block_type=se.SELayer.SSE)
+        self.decode1 = sm.DecoderBlock(params, se_block_type=se.SELayer.NONE)
+        self.decode2 = sm.DecoderBlock(params, se_block_type=se.SELayer.NONE)
+        self.decode3 = sm.DecoderBlock(params, se_block_type=se.SELayer.NONE)
         params['num_channels'] = 64
         self.classifier = sm.ClassifierBlock(params)
         self.sigmoid = nn.Sigmoid()
@@ -92,6 +92,17 @@ class Segmentor(nn.Module):
         prob = self.sigmoid(logit)
 
         return prob
+
+    def save(self, path):
+        """
+        Save model with its parameters to the given path. Conventionally the
+        path should end with "*.model".
+
+        Inputs:
+        - path: path string
+        """
+        print('Saving model... %s' % path)
+        torch.save(self, path)
 
 
 class FewShotSegmentor(nn.Module):

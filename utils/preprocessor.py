@@ -12,7 +12,7 @@ def rotate_orientation(volume_data, volume_label, orientation=ORIENTATION['coron
         return volume_data.transpose((2, 0, 1)), volume_label.transpose((2, 0, 1))
     elif orientation == ORIENTATION['axial']:
         return volume_data.transpose((1, 2, 0)), volume_label.transpose((1, 2, 0))
-    elif orientation == ORIENTATION['sagittal']:
+    elif orientation == ORIENTATION['sagital']:
         return volume_data, volume_label
     else:
         raise ValueError("Invalid value for orientation. Pleas see help")
@@ -25,7 +25,11 @@ def estimate_weights_mfb(labels):
     weights = np.zeros(len(unique))
     for i, label in enumerate(unique):
         class_weights += (median_freq // counts[i]) * np.array(labels == label)
-        weights[int(label)] = median_freq // counts[i]
+        try:
+            weights[int(label)] = median_freq // counts[i]
+        except IndexError as e:
+            print("Exception in processing")
+            continue
 
     grads = np.gradient(labels)
     edge_weights = (grads[0] ** 2 + grads[1] ** 2) > 0

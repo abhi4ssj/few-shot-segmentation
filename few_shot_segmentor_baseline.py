@@ -11,7 +11,6 @@ from squeeze_and_excitation import squeeze_and_excitation as se
 class Conditioner(nn.Module):
     """
     A conditional branch of few shot learning regressing the parameters for the segmentor
-
     """
 
     def __init__(self, params):
@@ -30,16 +29,51 @@ class Conditioner(nn.Module):
         o3 = self.genblock2(o2)
         o4 = self.maxpool(o3)
         o5 = self.genblock3(o4)
-        batch_size, num_channels, H, W = o1.size()
-        # o6 = o1.view(batch_size, num_channels, -1).mean(dim=2)
+        o6 = self.maxpool(o5)
+        # batch_size, num_channels, H, W = o1.size()
+        # o6, _ = o1.view(batch_size, num_channels, -1).max(dim=2)
         # o6 = self.tanh(o1.view(batch_size, num_channels, -1).mean(dim=2))
-        batch_size, num_channels, H, W = o3.size()
-        # o7 = o3.view(batch_size, num_channels, -1).mean(dim=2)
+        # batch_size, num_channels, H, W = o3.size()
+        # o7, _ = o3.view(batch_size, num_channels, -1).max(dim=2)
         # o7 = self.tanh(o3.view(batch_size, num_channels, -1).mean(dim=2))
-        batch_size, num_channels, H, W = o5.size()
-        o8 = o5.view(batch_size, num_channels, -1).mean(dim=2)
-        # o8 = self.tanh(o5.view(batch_size, num_channels, -1).mean(dim=2))
+        batch_size, num_channels, H, W = o6.size()
+        o8, _ = o6.view(batch_size, num_channels, H, W).max(dim=1)
+        # o9, _ = o5.view(batch_size, num_channels, -1).max(dim=2)
         return o8
+
+
+# class Conditioner(nn.Module):
+#     """
+#     A conditional branch of few shot learning regressing the parameters for the segmentor
+#
+#     """
+#
+#     def __init__(self, params):
+#         super(Conditioner, self).__init__()
+#         params['num_channels'] = 1
+#         self.genblock1 = sm.GenericBlock(params)
+#         params['num_channels'] = 64
+#         self.genblock2 = sm.GenericBlock(params)
+#         self.genblock3 = sm.GenericBlock(params)
+#         self.maxpool = nn.MaxPool2d(kernel_size=params['pool'], stride=params['stride_pool'])
+#         self.tanh = nn.Tanh()
+#
+#     def forward(self, input):
+#         o1 = self.genblock1(input)
+#         o2 = self.maxpool(o1)
+#         o3 = self.genblock2(o2)
+#         o4 = self.maxpool(o3)
+#         o5 = self.genblock3(o4)
+#         batch_size, num_channels, H, W = o1.size()
+#         # o6 = o1.view(batch_size, num_channels, -1).mean(dim=2)
+#         # o6 = self.tanh(o1.view(batch_size, num_channels, -1).mean(dim=2))
+#         batch_size, num_channels, H, W = o3.size()
+#         # o7 = o3.view(batch_size, num_channels, -1).mean(dim=2)
+#         # o7 = self.tanh(o3.view(batch_size, num_channels, -1).mean(dim=2))
+#         batch_size, num_channels, H, W = o5.size()
+#         o8,_ = o5.view(batch_size, num_channels, -1).max(dim=2)
+#         # o8 = self.tanh(o5.view(batch_size, num_channels, -1).mean(dim=2))
+#         return o8
 
 
 class Segmentor(nn.Module):
@@ -68,27 +102,29 @@ class Segmentor(nn.Module):
         params['num_channels'] = 64
         self.encode2 = sm.EncoderBlock(params)
         self.encode3 = sm.EncoderBlock(params)
-        self.bottleneck = sm.DenseBlock(params)
+        self.bottleneck = sm.GenericBlock(params)
         params['num_channels'] = 128
-        self.decode1 = sm.DecoderBlock(params, se_block_type=se.SELayer.SSE)
-        self.decode2 = sm.DecoderBlock(params, se_block_type=se.SELayer.SSE)
-        self.decode3 = sm.DecoderBlock(params, se_block_type=se.SELayer.SSE)
+        self.decode1 = sm.DecoderBlock(params)
+        self.decode2 = sm.DecoderBlock(params)
+        self.decode3 = sm.DecoderBlock(params)
         params['num_channels'] = 64
         self.classifier = sm.ClassifierBlock(params)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, inpt, weights=None):
         w1 = weights
+        w1 = w1.unsqueeze(dim=1)
         e1, out1, ind1 = self.encode1(inpt)
         e2, out2, ind2 = self.encode2(e1)
         e3, out3, ind3 = self.encode3(e2)
 
         bn = self.bottleneck.forward(e3)
+        bn = torch.mul(bn, self.sigmoid(w1))
 
         d3 = self.decode1(bn, out3, ind3)
         d2 = self.decode2(d3, out2, ind2)
         d1 = self.decode3(d2, out1, ind1)
-        logit = self.classifier.forward(d1, w1)
+        logit = self.classifier.forward(d1)
         prob = self.sigmoid(logit)
 
         return prob
@@ -103,6 +139,7 @@ class FewShotSegmentorBaseLine(nn.Module):
         super(FewShotSegmentorBaseLine, self).__init__()
         self.conditioner = Conditioner(params)
         self.segmentor = Segmentor(params)
+        self.SELayer = se.ChannelSpatialSELayer(params['num_filters'])
 
     def forward(self, input1, input2):
         weights = self.conditioner(input1)
