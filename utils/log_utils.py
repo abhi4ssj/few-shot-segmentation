@@ -87,7 +87,7 @@ class LogWriter(object):
     def dice_score_per_epoch(self, phase, output, correct_labels, epoch):
         print("Dice Score...", end='', flush=True)
         # TODO: multiclass vs binary
-        ds = eu.dice_score_binary(output, correct_labels, self.num_class)
+        ds = eu.dice_score_binary(output, correct_labels, self.num_class, phase)
         print('Dice score is ' + str(ds))
         # self.plot_dice_score(phase, 'dice_score_per_epoch', ds, 'Dice Score', epoch)
 
