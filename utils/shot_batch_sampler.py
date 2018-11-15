@@ -4,17 +4,17 @@ import numpy as np
 def get_lab_list(phase):
     lab_list = []
     if phase == 'train':
-        lab_list = [1, 2, 4, 5, 8, 9]
+        lab_list = [1, 4, 7, 8]
         # lab_list = [4, 5, 6, 7]
     elif phase == 'val':
-        lab_list = [6, 7]
+        lab_list = [2, 5, 6, 9]
     return lab_list
 
 
 #
 def get_class_slices(labels, i):
     num_slices, H, W = labels.shape
-    thresh = 0.01
+    thresh = 0.005
     total_slices = labels == i
     pixel_sum = np.sum(total_slices, axis=(1, 2)).squeeze()
     pixel_sum = pixel_sum / (H * W)
