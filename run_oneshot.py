@@ -5,8 +5,9 @@ import torch
 import torch.nn as nn
 
 import utils.evaluator as eu
-from few_shot_segmentor import Segmentor
-from few_shot_segmentor_baseline import FewShotSegmentorBaseLine
+from few_shot_segmentor_unet import FewShotSegmentorDoubleSDnet
+# from few_shot_segmentor import Segmentor
+# from few_shot_segmentor_baseline import FewShotSegmentorBaseLine
 from settings import Settings
 from solver_oneshot import Solver
 from utils.data_utils import get_imdb_dataset
@@ -51,7 +52,7 @@ def train(train_params, common_params, data_params, net_params):
     # for param in segmentor_pretrained.parameters():
     #     param.requires_grad = False
 
-    few_shot_model = FewShotSegmentorBaseLine(net_params)
+    few_shot_model = FewShotSegmentorDoubleSDnet(net_params)
     # few_shot_model.segmentor = segmentor_pretrained
 
     solver = Solver(few_shot_model,

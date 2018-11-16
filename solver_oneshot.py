@@ -47,8 +47,8 @@ class Solver(object):
             self.loss_func = loss_func
 
         self.optim = optim(
-            [{'params': model.conditioner.parameters(), 'lr': 1e-5, 'momentum': 0.99, 'weight_decay': 0.0001},
-             {'params': model.segmentor.parameters(), 'lr': 1e-2, 'momentum': 0.99, 'weight_decay': 0.0001},
+            [{'params': model.conditioner.parameters(), 'lr': 1e-3, 'momentum': 0.9, 'weight_decay': 0.001},
+             {'params': model.segmentor.parameters(), 'lr': 1e-1, 'momentum': 0.9, 'weight_decay': 0.001},
              ], **optim_args)
         # self.optim = optim(model.parameters(), **optim_args)
         self.scheduler = lr_scheduler.StepLR(self.optim, step_size=lr_scheduler_step_size,
@@ -132,6 +132,9 @@ class Solver(object):
                     if phase == 'train':
                         optim.zero_grad()
                         loss.backward()
+                        # TODO: value needs to be optimized, Gradient Clipping (Optional)
+                        if epoch > 1:
+                            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.0001)
                         optim.step()
                         if i_batch % self.log_nth == 0:
                             self.logWriter.loss_per_iter(loss.item(), i_batch, current_iteration)
