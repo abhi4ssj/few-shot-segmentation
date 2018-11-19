@@ -48,6 +48,7 @@ class LogWriter(object):
             loss = np.mean(loss_arr)
         self.writer[phase].add_scalar('loss/per_epoch', loss, epoch)
         print('epoch ' + phase + ' loss = ' + str(loss))
+        return loss
 
     def cm_per_epoch(self, phase, output, correct_labels, epoch):
         print("Confusion Matrix...", end='', flush=True)

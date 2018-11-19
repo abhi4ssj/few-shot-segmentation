@@ -116,7 +116,8 @@ class SDnetSegmentor(nn.Module):
         self.decode3 = sm.SDnetDecoderBlock(params)
         params['num_channels'] = 64
         self.classifier = sm.ClassifierBlock(params)
-        self.sigmoid = nn.Sigmoid()
+        self.soft_max = nn.Softmax2d()
+        # self.sigmoid = nn.Sigmoid()
 
     def forward(self, inpt, weights=None):
         e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
@@ -138,7 +139,7 @@ class SDnetSegmentor(nn.Module):
         d1 = torch.mul(d1, d_w1)
         logit = self.classifier.forward(d1)
         logit = torch.mul(logit, cls_w)
-        prob = self.sigmoid(logit)
+        prob = self.soft_max(logit)
 
         return prob
 
