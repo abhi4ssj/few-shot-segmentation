@@ -9,7 +9,7 @@ from few_shot_segmentor_unet import FewShotSegmentorDoubleSDnet
 # from few_shot_segmentor import Segmentor
 # from few_shot_segmentor_baseline import FewShotSegmentorBaseLine
 from settings import Settings
-from solver_oneshot import Solver
+from solver_oneshot_multiOpti_auto import Solver
 from utils.data_utils import get_imdb_dataset
 from utils.log_utils import LogWriter
 from utils.shot_batch_sampler import OneShotBatchSampler

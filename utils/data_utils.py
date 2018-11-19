@@ -135,8 +135,9 @@ def split_batch(X, y, query_label):
     input1 = X[0:batch_size, :, :, :]
     input2 = X[batch_size:, :, :, :]
     y1 = (y[0:batch_size, :, :] == query_label).type(torch.FloatTensor)
-    y2 = (y[batch_size:, :, :] == query_label).type(torch.FloatTensor)
-    y2 = y2.unsqueeze(1)
+    y2 = (y[batch_size:, :, :] == query_label).type(torch.LongTensor)
+    # y2 = (y[batch_size:, :, :] == query_label).type(torch.FloatTensor)
+    # y2 = y2.unsqueeze(1)
     #Why?
     # input1 = torch.cat([input1, y1.unsqueeze(1)], dim=1)
 
