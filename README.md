@@ -1,4 +1,4 @@
-# Few-shot segmentation with Fully Convolutional Networks
+# Few-shot segmentation with Fully ConvNets
 
 PyTorch Implementation 
 
