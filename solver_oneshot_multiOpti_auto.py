@@ -22,7 +22,7 @@ class Solver(object):
                  exp_name,
                  device,
                  num_class,
-                 optim=torch.optim.SGD,
+                 optim=torch.optim.Adam,
                  optim_args={},
                  loss_func=losses.DiceLoss(),
                  model_name='OneShotSegmentor',
@@ -47,11 +47,11 @@ class Solver(object):
             self.loss_func = loss_func
 
         self.optim_c = optim(
-            [{'params': model.conditioner.parameters(), 'lr': 1e-2, 'momentum': 0.99, 'weight_decay': 0.001}
+            [{'params': model.conditioner.parameters(), 'lr': 1e-3, 'weight_decay': 0.001}
              ], **optim_args)
 
         self.optim_s = optim(
-            [{'params': model.segmentor.parameters(), 'lr': 1e-2, 'momentum': 0.99, 'weight_decay': 0.001}
+            [{'params': model.segmentor.parameters(), 'lr': 1e-3, 'weight_decay': 0.001}
              ], **optim_args)
 
         # self.optim = optim(model.parameters(), **optim_args)
@@ -99,7 +99,7 @@ class Solver(object):
         print('START TRAINING. : model name = %s, device = %s' % (
             self.model_name, torch.cuda.get_device_name(self.device)))
         current_iteration = self.start_iteration
-        warm_up_epoch = 2
+        warm_up_epoch = 5
         val_old = 0
         change_model = False
         current_model = 'seg'
