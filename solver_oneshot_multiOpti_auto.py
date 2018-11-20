@@ -22,7 +22,7 @@ class Solver(object):
                  exp_name,
                  device,
                  num_class,
-                 optim=torch.optim.Adam,
+                 optim=torch.optim.SGD,
                  optim_args={},
                  loss_func=losses.DiceLoss(),
                  model_name='OneShotSegmentor',
@@ -47,11 +47,11 @@ class Solver(object):
             self.loss_func = loss_func
 
         self.optim_c = optim(
-            [{'params': model.conditioner.parameters(), 'lr': 1e-3, 'weight_decay': 0.001}
+            [{'params': model.conditioner.parameters(), 'lr': 1e-2, 'weight_decay': 0.001}
              ], **optim_args)
 
         self.optim_s = optim(
-            [{'params': model.segmentor.parameters(), 'lr': 1e-3, 'weight_decay': 0.001}
+            [{'params': model.segmentor.parameters(), 'lr': 1e-2, 'weight_decay': 0.001}
              ], **optim_args)
 
         # self.optim = optim(model.parameters(), **optim_args)
