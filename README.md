@@ -1,5 +1,7 @@
-# quickNAT_pytorch
+# Few-shot segmentation with Fully Convolutional Networks
 
-PyTorch Implementation of QuickNAT
+PyTorch Implementation 
+
+Coded by: Abhijit and Shayan
 
 Under Developement
