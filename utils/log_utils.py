@@ -10,6 +10,11 @@ import numpy as np
 from tensorboardX import SummaryWriter
 import torch
 import evaluator as eu
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
 
 plt.switch_backend('agg')
 plt.axis('scaled')
@@ -30,15 +35,23 @@ class LogWriter(object):
                 shutil.rmtree(val_log_path)
 
         self.writer = {
-            'train': SummaryWriter(train_log_path),
-            'val': SummaryWriter(val_log_path)
+            'train': SummaryWriter(log_dir=train_log_path, comment='Train Summary', flush_secs=30),
+            'val': SummaryWriter(log_dir=val_log_path, comment='Val Summary', flush_secs=30)
         }
         self.curr_iter = 1
         self.cm_cmap = cm_cmap
         self.labels = self.beautify_labels(labels)
+        self.logger = logging.getLogger()
+        file_handler = logging.FileHandler("{0}/{1}.log".format(os.path.join(log_dir_name, exp_name), "console_logs"))
+        # console_handler = logging.StreamHandler()
+        self.logger.addHandler(file_handler)
+        # self.logger.addHandler(console_handler)
+
+    def log(self, text, phase='train'):
+        self.logger.info(text)
 
     def loss_per_iter(self, loss_value, i_batch, current_iteration):
-        print('[Iteration : ' + str(i_batch) + '] Loss -> ' + str(loss_value))
+        self.log('[Iteration : ' + str(i_batch) + '] Loss -> ' + str(loss_value))
         self.writer['train'].add_scalar('loss/per_iteration', loss_value, current_iteration)
 
     def loss_per_epoch(self, loss_arr, phase, epoch):
@@ -47,14 +60,16 @@ class LogWriter(object):
         else:
             loss = np.mean(loss_arr)
         self.writer[phase].add_scalar('loss/per_epoch', loss, epoch)
-        print('epoch ' + phase + ' loss = ' + str(loss))
+        self.log('epoch ' + phase + ' loss = ' + str(loss))
+
         return loss
 
     def cm_per_epoch(self, phase, output, correct_labels, epoch):
-        print("Confusion Matrix...", end='', flush=True)
+
+        self.log("Confusion Matrix...")
         _, cm = eu.dice_confusion_matrix(output, correct_labels, self.num_class, mode='train')
         self.plot_cm('confusion_matrix', phase, cm, epoch)
-        print("DONE", flush=True)
+        self.log("DONE")
 
     def plot_cm(self, caption, phase, cm, step=None):
         fig = matplotlib.figure.Figure(figsize=(8, 8), dpi=180, facecolor='w', edgecolor='k')
@@ -86,13 +101,14 @@ class LogWriter(object):
             self.writer[phase].add_figure(caption + '/' + phase, fig)
 
     def dice_score_per_epoch(self, phase, output, correct_labels, epoch):
-        print("Dice Score...", end='', flush=True)
+        self.log("Dice Score...")
+
         # TODO: multiclass vs binary
         ds = eu.dice_score_binary(output, correct_labels, self.num_class, phase)
-        print('Dice score is ' + str(ds))
+        self.log('Dice score is ' + str(ds))
         # self.plot_dice_score(phase, 'dice_score_per_epoch', ds, 'Dice Score', epoch)
 
-        print("DONE", flush=True)
+        self.log("DONE")
 
     def plot_dice_score(self, phase, caption, ds, title, step=None):
         fig = matplotlib.figure.Figure(figsize=(8, 6), dpi=180, facecolor='w', edgecolor='k')
@@ -120,7 +136,7 @@ class LogWriter(object):
         self.writer['val'].add_figure(caption, fig)
 
     def image_per_epoch(self, prediction, ground_truth, phase, epoch, additional_image=None):
-        print("Sample Images...", end='', flush=True)
+        self.log("Sample Images...")
         ncols = 5
         nrows = len(prediction)
 
@@ -144,7 +160,7 @@ class LogWriter(object):
             ax[i][4].axis('off')
         fig.set_tight_layout(True)
         self.writer[phase].add_figure('sample_prediction/' + phase, fig, epoch)
-        print('DONE', flush=True)
+        self.log('DONE')
 
     def graph(self, model, X):
         self.writer['train'].add_graph(model, X)

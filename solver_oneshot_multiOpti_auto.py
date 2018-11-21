@@ -47,11 +47,11 @@ class Solver(object):
             self.loss_func = loss_func
 
         self.optim_c = optim(
-            [{'params': model.conditioner.parameters(), 'lr': 1e-2, 'weight_decay': 0.001}
+            [{'params': model.conditioner.parameters(), 'lr': 1e-2, 'momentum': 0.95, 'weight_decay': 0.001}
              ], **optim_args)
 
         self.optim_s = optim(
-            [{'params': model.segmentor.parameters(), 'lr': 1e-2, 'weight_decay': 0.001}
+            [{'params': model.segmentor.parameters(), 'lr': 1e-2, 'momentum': 0.95, 'weight_decay': 0.001}
              ], **optim_args)
 
         # self.optim = optim(model.parameters(), **optim_args)
@@ -96,25 +96,25 @@ class Solver(object):
             torch.cuda.empty_cache()
             model.cuda(self.device)
 
-        print('START TRAINING. : model name = %s, device = %s' % (
+        self.logWriter.log('START TRAINING. : model name = %s, device = %s' % (
             self.model_name, torch.cuda.get_device_name(self.device)))
         current_iteration = self.start_iteration
-        warm_up_epoch = 5
+        warm_up_epoch = 3
         val_old = 0
         change_model = False
         current_model = 'seg'
         for epoch in range(self.start_epoch, self.num_epochs + 1):
-            print("\n==== Epoch [ %d  /  %d ] START ====" % (epoch, self.num_epochs))
+            self.logWriter.log('train', "\n==== Epoch [ %d  /  %d ] START ====" % (epoch, self.num_epochs))
             if epoch > warm_up_epoch:
                 if current_model == 'seg':
-                    print("Optimizing Segmentor")
+                    self.logWriter.log("Optimizing Segmentor")
                     optim = optim_s
                 elif current_model == 'con':
                     optim = optim_c
-                    print("Optimizing Conditioner")
+                    self.logWriter.log("Optimizing Conditioner")
 
             for phase in ['train', 'val']:
-                print("<<<= Phase: %s =>>>" % phase)
+                self.logWriter.log("<<<= Phase: %s =>>>" % phase)
                 loss_arr = []
                 input_img_list = []
                 y_list = []
@@ -186,7 +186,7 @@ class Solver(object):
                         else:
                             print("100%", flush=True)
                 if phase == 'train':
-                    print('saving checkpoint ....')
+                    self.logWriter.log('saving checkpoint ....')
                     self.save_checkpoint({
                         'epoch': epoch + 1,
                         'start_iteration': current_iteration + 1,
@@ -209,14 +209,14 @@ class Solver(object):
                     current_loss = self.logWriter.loss_per_epoch(loss_arr, phase, epoch)
                     if phase == 'val':
                         if epoch > warm_up_epoch:
-                            print("Diff : " + str(current_loss - val_old))
-                            change_model = (current_loss - val_old) > 0.01
+                            self.logWriter.log("Diff : " + str(current_loss - val_old))
+                            change_model = (current_loss - val_old) > 0.001
 
                         if change_model and current_model == 'seg':
-                            print("Setting to con")
+                            self.logWriter.log("Setting to con")
                             current_model = 'con'
                         elif change_model and current_model == 'con':
-                            print("Setting to seg")
+                            self.logWriter.log("Setting to seg")
                             current_model = 'seg'
                         val_old = current_loss
                     index = np.random.choice(len(out_arr), 3, replace=False)
@@ -224,8 +224,8 @@ class Solver(object):
                         input_img_arr[index], condition_input_img_arr[index], condition_y_arr[index]))
                     self.logWriter.dice_score_per_epoch(phase, out_arr, y_arr, epoch)
 
-            print("==== Epoch [" + str(epoch) + " / " + str(self.num_epochs) + "] DONE ====")
-        print('FINISH.')
+                    self.logWriter.log("==== Epoch [" + str(epoch) + " / " + str(self.num_epochs) + "] DONE ====")
+                self.logWriter.log('FINISH.')
         self.logWriter.close()
 
     def save_checkpoint(self, state, filename):
@@ -236,7 +236,7 @@ class Solver(object):
         list_of_files = glob.glob(checkpoint_path)
         if len(list_of_files) > 0:
             latest_file = max(list_of_files, key=os.path.getctime)
-            print("=> loading checkpoint '{}'".format(latest_file))
+            self.logWriter.log("=> loading checkpoint '{}'".format(latest_file))
             checkpoint = torch.load(latest_file)
             self.start_epoch = checkpoint['epoch']
             self.start_iteration = checkpoint['start_iteration']
@@ -256,6 +256,7 @@ class Solver(object):
 
             self.scheduler_c.load_state_dict(checkpoint['scheduler_c'])
             self.scheduler_s.load_state_dict(checkpoint['scheduler_s'])
-            print("=> loaded checkpoint '{}' (epoch {})".format(latest_file, checkpoint['epoch']))
+            self.logWriter.log("=> loaded checkpoint '{}' (epoch {})".format(latest_file, checkpoint['epoch']))
         else:
-            print("=> no checkpoint found at '{}' folder".format(os.path.join(self.exp_dir_path, CHECKPOINT_DIR)))
+            self.logWriter.log(
+                "=> no checkpoint found at '{}' folder".format(os.path.join(self.exp_dir_path, CHECKPOINT_DIR)))

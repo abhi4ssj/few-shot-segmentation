@@ -6,14 +6,23 @@ import torch
 import torch.utils.data as data
 import scipy.io as sio
 import preprocessor as preprocessor
+from torchvision import transforms
+
 # import utils.preprocessor as preprocessor
 
 
+transform_train = transforms.Compose([
+    transforms.RandomCrop((480, 220), padding=(32, 36)),
+    transforms.ToTensor(),
+])
+
+
 class ImdbData(data.Dataset):
-    def __init__(self, X, y, w):
+    def __init__(self, X, y, w, transforms=None):
         self.X = X if len(X.shape) == 4 else X[:, np.newaxis, :, :]
         self.y = y
         self.w = w
+        self.transforms = transforms
 
     def __getitem__(self, index):
         img = torch.from_numpy(self.X[index])
@@ -36,7 +45,8 @@ def get_imdb_dataset(data_params):
     class_weight_test = h5py.File(os.path.join(data_params['data_dir'], data_params['test_class_weights_file']), 'r')
     weight_test = h5py.File(os.path.join(data_params['data_dir'], data_params['test_weights_file']), 'r')
 
-    return (ImdbData(data_train['data'][()], label_train['label'][()], class_weight_train['class_weights'][()]),
+    return (ImdbData(data_train['data'][()], label_train['label'][()], class_weight_train['class_weights'][()],
+                     transforms=transform_train),
             ImdbData(data_test['data'][()], label_test['label'][()], class_weight_test['class_weights'][()]))
 
 
@@ -51,10 +61,10 @@ def load_dataset(file_paths,
 
     for file_path in file_paths:
         volume, labelmap, class_weights, weights = load_and_preprocess(file_path, orientation,
-                                                                            remap_config=remap_config,
-                                                                            reduce_slices=reduce_slices,
-                                                                            remove_black=remove_black,
-                                                                            return_weights=return_weights)
+                                                                       remap_config=remap_config,
+                                                                       reduce_slices=reduce_slices,
+                                                                       remove_black=remove_black,
+                                                                       return_weights=return_weights)
 
         volume_list.append(volume)
         labelmap_list.append(labelmap)
@@ -62,7 +72,6 @@ def load_dataset(file_paths,
         if return_weights:
             class_weights_list.append(class_weights)
             weights_list.append(weights)
-
 
         print("#", end='', flush=True)
     print("100%", flush=True)
@@ -85,8 +94,6 @@ def load_and_preprocess(file_path, orientation, remap_config, reduce_slices=Fals
     return volume, labelmap, class_weights, weights
 
 
-
-
 def load_data_mat(file_path, orientation):
     data = sio.loadmat(file_path)
     volume = data['DatVol']
@@ -102,7 +109,6 @@ def preprocess(volume, labelmap, remap_config, reduce_slices=False, remove_black
 
     if remap_config:
         labelmap = preprocessor.remap_labels(labelmap, remap_config)
-    print(np.unique(labelmap))
     if remove_black:
         volume, labelmap = preprocessor.remove_black(volume, labelmap)
 
@@ -138,7 +144,7 @@ def split_batch(X, y, query_label):
     y2 = (y[batch_size:, :, :] == query_label).type(torch.LongTensor)
     # y2 = (y[batch_size:, :, :] == query_label).type(torch.FloatTensor)
     # y2 = y2.unsqueeze(1)
-    #Why?
+    # Why?
     # input1 = torch.cat([input1, y1.unsqueeze(1)], dim=1)
 
     return input1, input2, y1, y2

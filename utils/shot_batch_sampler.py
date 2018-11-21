@@ -1,14 +1,14 @@
 import numpy as np
 
+lab_list_fold = {"fold1": {"train": [2, 4, 5, 6, 7, 8, 9], "val": [1]},
+                 "fold2": {"train": [1, 4, 5, 6, 7, 8, 9], "val": [2]},
+                 "fold3": {"train": [1, 2, 6, 7, 8, 9], "val": [4, 5]},
+                 "fold4": {"train": [1, 2, 4, 5, 8, 9], "val": [6, 7]},
+                 "fold5": {"train": [1, 2, 4, 5, 6, 7], "val": [8, 9]}}
 
-def get_lab_list(phase):
-    lab_list = []
-    if phase == 'train':
-        lab_list = [1, 4, 7, 8]
-        # lab_list = [4, 5, 6, 7]
-    elif phase == 'val':
-        lab_list = [2, 5, 6, 9]
-    return lab_list
+
+def get_lab_list(phase, fold):
+    return lab_list_fold[fold][phase]
 
 
 #
@@ -43,7 +43,7 @@ class OneShotBatchSampler:
         query_label = np.random.choice(self.lab_list, 1, p=self.p)[0]
         return query_label
 
-    def __init__(self, labels, phase, batch_size, iteration=500):
+    def __init__(self, labels, phase, fold, batch_size, iteration=500):
         '''
 
         '''
@@ -60,7 +60,7 @@ class OneShotBatchSampler:
         self.iteration = iteration
         self.labels = labels
         self.phase = phase
-        self.lab_list = get_lab_list(phase)
+        self.lab_list = get_lab_list(phase, fold)
         self.index_dict, self.p = get_index_dict(labels, self.lab_list)
 
     def __iter__(self):
@@ -91,4 +91,3 @@ class OneShotBatchSampler:
         """
 
         return self.iteration
-
