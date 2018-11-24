@@ -6,10 +6,12 @@ import torch
 import utils.evaluator as eu
 from few_shot_segmentor import FewShotSegmentor, Segmentor
 from few_shot_segmentor_baseline import FewShotSegmentorBaseLine
+from few_shot_segmentor_model10 import SDnetSegmentor
 from settings import Settings
 from solver import Solver
 from utils.data_utils import get_imdb_dataset
 from utils.log_utils import LogWriter
+import numpy as np
 from utils.shot_batch_sampler import OneShotBatchSampler
 
 torch.set_default_tensor_type('torch.FloatTensor')
@@ -26,36 +28,38 @@ def load_data(data_params):
 def train(train_params, common_params, data_params, net_params):
     train_data, test_data = load_data(data_params)
     # TODO: Only for segmentor
-    train_data.y[train_data.y == 6] = 0
-    train_data.y[train_data.y == 7] = 0
-    train_data.y[train_data.y == 5] = 4
+    train_data.y[train_data.y == 4] = 0
+    train_data.y[train_data.y == 5] = 0
+
+    test_data.y[test_data.y == 4] = 0
+    test_data.y[test_data.y == 5] = 0
+
+    # Removing liver
+    train_data.y[train_data.y == 1] = 0
+    test_data.y[test_data.y == 1] = 0
+
+    train_data.y[train_data.y == 2] = 1
+    test_data.y[test_data.y == 2] = 1
+
+    train_data.y[train_data.y == 3] = 2
+    test_data.y[test_data.y == 3] = 2
+
+    train_data.y[train_data.y == 6] = 3
+    train_data.y[train_data.y == 7] = 4
     train_data.y[train_data.y == 8] = 5
-    train_data.y[train_data.y == 9] = 5
+    train_data.y[train_data.y == 9] = 6
 
-    test_data.y[test_data.y == 6] = 0
-    test_data.y[test_data.y == 7] = 0
-    test_data.y[test_data.y == 5] = 4
+    test_data.y[test_data.y == 6] = 3
+    test_data.y[test_data.y == 7] = 4
     test_data.y[test_data.y == 8] = 5
-    test_data.y[test_data.y == 9] = 5
+    test_data.y[test_data.y == 9] = 6
 
-    # train_sampler = OneShotBatchSampler(train_data.y, 'train', train_params['train_batch_size'],
-    #                                     iteration=train_params['iterations'])
-    # test_sampler = OneShotBatchSampler(test_data.y, 'val', train_params['val_batch_size'],
-    #                                    iteration=train_params['iterations'])
-
-    # TODO: Change for one shot Learning
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=train_params['train_batch_size'], shuffle=True,
                                                num_workers=4, pin_memory=True)
     val_loader = torch.utils.data.DataLoader(test_data, batch_size=train_params['val_batch_size'], shuffle=False,
                                              num_workers=4, pin_memory=True)
 
-
-
-    # train_loader = torch.utils.data.DataLoader(train_data, batch_sampler=train_sampler)
-    # val_loader = torch.utils.data.DataLoader(test_data, batch_sampler=test_sampler)
-
-    few_shot_model = Segmentor(net_params)
-    # few_shot_model = FewShotSegmentorBaseLine(net_params)
+    few_shot_model = SDnetSegmentor(net_params)
 
     solver = Solver(few_shot_model,
                     device=common_params['device'],
@@ -77,8 +81,8 @@ def train(train_params, common_params, data_params, net_params):
 
     solver.train(train_loader, val_loader)
     final_model_path = os.path.join(common_params['save_model_dir'], train_params['final_model_file'])
-    few_shot_model.save(final_model_path)
-    print("final model saved @ " + str(final_model_path))
+    solver.save_best_model(final_model_path)
+    print("best model saved @ " + str(final_model_path))
 
 
 def evaluate(eval_params, net_params, data_params, common_params, train_params):

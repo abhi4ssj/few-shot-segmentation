@@ -5,7 +5,9 @@ import torch
 import torch.nn as nn
 from nn_common_modules import modules as sm
 from data_utils import split_batch
-# import torch.nn.functional as F
+
+
+import torch.nn.functional as F
 # from squeeze_and_excitation import squeeze_and_excitation as se
 
 
@@ -19,63 +21,71 @@ class SDnetConditioner(nn.Module):
         params['num_channels'] = 2
         params['num_filters'] = 64
         self.encode1 = sm.SDnetEncoderBlock(params)
-        self.squeeze_conv_e1 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
-                                       kernel_size=(1, 1),
-                                       padding=(0, 0),
-                                       stride=1)
-        params['num_channels'] = 64
+        self.squeeze_conv_e1 = nn.Conv2d(in_channels=params['num_filters']+1, out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
+        params['num_channels'] = 65
         self.encode2 = sm.SDnetEncoderBlock(params)
-        self.squeeze_conv_e2 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
-                                       kernel_size=(1, 1),
-                                       padding=(0, 0),
-                                       stride=1)
+        self.squeeze_conv_e2 = nn.Conv2d(in_channels=params['num_filters']+1, out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
         self.encode3 = sm.SDnetEncoderBlock(params)
-        self.squeeze_conv_e3 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
-                                       kernel_size=(1, 1),
-                                       padding=(0, 0),
-                                       stride=1)
+        self.squeeze_conv_e3 = nn.Conv2d(in_channels=params['num_filters']+1, out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
         self.bottleneck = sm.GenericBlock(params)
         self.squeeze_conv_bn = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
-                                       kernel_size=(1, 1),
-                                       padding=(0, 0),
-                                       stride=1)
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
         params['num_channels'] = 128
         self.decode1 = sm.SDnetDecoderBlock(params)
-        self.squeeze_conv_d1 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
-                                       kernel_size=(1, 1),
-                                       padding=(0, 0),
-                                       stride=1)
+        self.squeeze_conv_d1 = nn.Conv2d(in_channels=params['num_filters']+1, out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
         self.decode2 = sm.SDnetDecoderBlock(params)
-        self.squeeze_conv_d2 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
-                                       kernel_size=(1, 1),
-                                       padding=(0, 0),
-                                       stride=1)
+        self.squeeze_conv_d2 = nn.Conv2d(in_channels=params['num_filters']+1, out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
         self.decode3 = sm.SDnetDecoderBlock(params)
-        self.squeeze_conv_d3 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
-                                       kernel_size=(1, 1),
-                                       padding=(0, 0),
-                                       stride=1)
+        self.squeeze_conv_d3 = nn.Conv2d(in_channels=params['num_filters']+1, out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
         params['num_channels'] = 64
         self.classifier = sm.ClassifierBlock(params)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, input):
+        mask = input[:, 1, :, :]
+        mask = mask.unsqueeze(dim=1)
         e1, out1, ind1 = self.encode1(input)
+        e1 = torch.cat((e1, F.avg_pool2d(mask, (2, 2), stride=2)), dim=1)
         e_w1 = self.sigmoid(self.squeeze_conv_e1(e1))
         e2, out2, ind2 = self.encode2(e1)
+        e2 = torch.cat((e2, F.avg_pool2d(mask, (4, 4), stride=4)), dim=1)
         e_w2 = self.sigmoid(self.squeeze_conv_e2(e2))
         e3, out3, ind3 = self.encode3(e2)
+        e3 = torch.cat((e3, F.avg_pool2d(mask, (8, 8), stride=8)), dim=1)
         e_w3 = self.sigmoid(self.squeeze_conv_e3(e3))
 
         bn = self.bottleneck(e3)
         bn_w = self.sigmoid(self.squeeze_conv_bn(bn))
 
         d3 = self.decode1(bn, out3, ind3)
-        d_w3 = self.sigmoid(self.squeeze_conv_d3(d3))
+        d3_1 = torch.cat((d3, F.avg_pool2d(mask, (4, 4), stride=4)), dim=1)
+        d_w3 = self.sigmoid(self.squeeze_conv_d3(d3_1))
         d2 = self.decode2(d3, out2, ind2)
-        d_w2 = self.sigmoid(self.squeeze_conv_d2(d2))
+        d2_1 = torch.cat((d2, F.avg_pool2d(mask, (2, 2), stride=2)), dim=1)
+        d_w2 = self.sigmoid(self.squeeze_conv_d2(d2_1))
         d1 = self.decode3(d2, out1, ind1)
-        d_w1 = self.sigmoid(self.squeeze_conv_d1(d1))
+        d1_1 = torch.cat((d1, mask), dim=1)
+        d_w1 = self.sigmoid(self.squeeze_conv_d1(d1_1))
         logit = self.classifier.forward(d1)
         cls_w = self.sigmoid(logit)
 
@@ -153,9 +163,16 @@ class FewShotSegmentorDoubleSDnet(nn.Module):
         super(FewShotSegmentorDoubleSDnet, self).__init__()
         self.conditioner = SDnetConditioner(params)
         self.segmentor = SDnetSegmentor(params)
+        self.weights = []
+
+    def _print_grads(self, x):
+        print("Median of gradient --- " + str(x.median().item()))
+        # print("Max" + str(x.max()))
+        # print("Min" + str(x.min()))
 
     def forward(self, input1, input2):
         weights = self.conditioner(input1)
+        # weights.register_hook(self._print_grads)
         segment = self.segmentor(input2, weights)
         return segment
 

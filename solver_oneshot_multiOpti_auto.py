@@ -8,6 +8,7 @@ from utils.log_utils import LogWriter
 import utils.common_utils as common_utils
 from data_utils import split_batch
 import glob
+import torch.nn.functional as F
 
 # plt.interactive(True)
 
@@ -24,7 +25,7 @@ class Solver(object):
                  num_class,
                  optim=torch.optim.SGD,
                  optim_args={},
-                 loss_func=losses.DiceLoss(),
+                 loss_func=losses.CombinedLoss(),
                  model_name='OneShotSegmentor',
                  labels=None,
                  num_epochs=10,
@@ -51,12 +52,12 @@ class Solver(object):
              ], **optim_args)
 
         self.optim_s = optim(
-            [{'params': model.segmentor.parameters(), 'lr': 1e-2, 'momentum': 0.95, 'weight_decay': 0.001}
+            [{'params': model.segmentor.parameters(), 'lr': 1e-4, 'momentum': 0.95, 'weight_decay': 0.001}
              ], **optim_args)
 
         # self.optim = optim(model.parameters(), **optim_args)
-        self.scheduler_c = lr_scheduler.StepLR(self.optim_c, step_size=20,
-                                               gamma=0.5)
+        self.scheduler_c = lr_scheduler.StepLR(self.optim_c, step_size=2,
+                                               gamma=0.1)
         self.scheduler_s = lr_scheduler.StepLR(self.optim_s, step_size=5,
                                                gamma=0.5)
 
@@ -72,10 +73,11 @@ class Solver(object):
         self.start_epoch = 1
         self.start_iteration = 1
 
+        self.best_ds_mean = 0
+        self.best_ds_mean_epoch = 0
+
         if use_last_checkpoint:
             self.load_checkpoint()
-
-            # TODO:Need to correct the CM and dice score calculation.
 
     def train(self, train_loader, test_loader):
         """
@@ -99,7 +101,7 @@ class Solver(object):
         self.logWriter.log('START TRAINING. : model name = %s, device = %s' % (
             self.model_name, torch.cuda.get_device_name(self.device)))
         current_iteration = self.start_iteration
-        warm_up_epoch = 3
+        warm_up_epoch = 5
         val_old = 0
         change_model = False
         current_model = 'seg'
@@ -136,22 +138,28 @@ class Solver(object):
                     query_label = data_loader[phase].batch_sampler.query_label
 
                     input1, input2, y1, y2 = split_batch(X, y, int(query_label))
+
+                    # sim_list = self.get_similarity_idx(y1, y2)
+                    # condition_input = torch.cat((input1, y1.unsqueeze(1)), dim=1)
+                    # TODO: Reverse Contrast
                     condition_input = torch.mul(input1, y1.unsqueeze(1))
+                    # condition_input_2 = torch.mul((1-input1), y1.unsqueeze(1))
+                    # condition_input = torch.cat((condition_input_1, condition_input_2), dim=1)
+                    query_input = input2
 
                     if model.is_cuda:
-                        condition_input, input2, y2 = condition_input.cuda(self.device, non_blocking=True), input2.cuda(
+                        condition_input, query_input, y2 = condition_input.cuda(self.device, non_blocking=True), query_input.cuda(
                             self.device,
                             non_blocking=True), y2.cuda(
                             self.device, non_blocking=True)
 
                     weights = model.conditioner(condition_input)
-                    output = model.segmentor(input2, weights)
+                    output = model.segmentor(query_input, weights)
                     # TODO: add weights
                     loss = self.loss_func(output, y2)
                     optim_s.zero_grad()
                     optim_c.zero_grad()
                     loss.backward()
-
                     if phase == 'train':
                         if epoch <= warm_up_epoch:
                             optim_s.step()
@@ -170,7 +178,7 @@ class Solver(object):
                     loss_arr.append(loss.item())
 
                     # batch_output = output > 0.5
-                    _, batch_output = torch.max(output, dim=1)
+                    _, batch_output = torch.max(F.softmax(output, dim=1), dim=1)
 
                     out_list.append(batch_output.cpu())
                     input_img_list.append(input2.cpu())

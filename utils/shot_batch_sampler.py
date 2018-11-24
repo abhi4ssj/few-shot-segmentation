@@ -1,10 +1,21 @@
 import numpy as np
 
-lab_list_fold = {"fold1": {"train": [2, 4, 5, 6, 7, 8, 9], "val": [1]},
-                 "fold2": {"train": [1, 4, 5, 6, 7, 8, 9], "val": [2]},
-                 "fold3": {"train": [1, 2, 6, 7, 8, 9], "val": [4, 5]},
-                 "fold4": {"train": [1, 2, 4, 5, 8, 9], "val": [6, 7]},
-                 "fold5": {"train": [1, 2, 4, 5, 6, 7], "val": [8, 9]}}
+# lab_list_fold = {"fold1": {"train": [2, 4, 5, 6, 7, 8, 9], "val": [1]},
+#                  "fold2": {"train": [1, 4, 5, 6, 7, 8, 9], "val": [2]},
+#                  "fold3": {"train": [1, 2, 6, 7, 8, 9], "val": [4, 5]},
+#                  "fold4": {"train": [1, 2, 4, 5, 8, 9], "val": [6, 7]},
+#                  "fold5": {"train": [1, 2, 4, 5, 6, 7], "val": [8, 9]}}
+
+lab_list_fold = {"fold1": {"train": [2, 6, 7, 8, 9], "val": [1]},
+                 "fold2": {"train": [1, 6, 7, 8, 9], "val": [2]},
+                 "fold4": {"train": [1, 2, 8, 9], "val": [6, 7]},
+                 "fold5": {"train": [1, 2, 6, 7], "val": [8, 9]}}
+
+# lab_list_fold = {"fold1": {"train": [2, 4, 6, 8], "val": [1]},
+#                  "fold2": {"train": [1, 4, 6, 8], "val": [2]},
+#                  "fold3": {"train": [1, 2, 6, 8], "val": [4]},
+#                  "fold4": {"train": [1, 2, 4, 8], "val": [6]},
+#                  "fold5": {"train": [1, 2, 4, 6], "val": [8]}}
 
 
 def get_lab_list(phase, fold):

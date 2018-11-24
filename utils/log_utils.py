@@ -110,6 +110,19 @@ class LogWriter(object):
 
         self.log("DONE")
 
+    def dice_score_per_epoch_segmentor(self, phase, output, correct_labels, epoch):
+        self.log("Dice Score...")
+
+        # TODO: multiclass vs binary
+        ds = eu.dice_score_perclass(output, correct_labels, self.num_class, mode=phase)
+        ds_mean = torch.mean(ds[1:])
+        self.log('Dice score is ' + str(ds))
+        self.log('Dice score mean ' + str(ds_mean))
+        self.plot_dice_score(phase, 'dice_score_per_epoch', ds, 'Dice Score', epoch)
+        self.log("DONE")
+        return ds_mean
+
+
     def plot_dice_score(self, phase, caption, ds, title, step=None):
         fig = matplotlib.figure.Figure(figsize=(8, 6), dpi=180, facecolor='w', edgecolor='k')
         ax = fig.add_subplot(1, 1, 1)
@@ -134,6 +147,24 @@ class LogWriter(object):
         c = ax.set_xticklabels(self.labels, fontsize=6, rotation=-90, ha='center')
         ax.xaxis.tick_bottom()
         self.writer['val'].add_figure(caption, fig)
+
+    def image_per_epoch_segmentor(self, prediction, ground_truth, phase, epoch):
+        self.log("Sample Images...")
+        ncols = 2
+        nrows = len(prediction)
+
+        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(10, 20))
+
+        for i in range(nrows):
+            ax[i][0].imshow(torch.squeeze(ground_truth[i]), cmap='CMRmap', vmin=0, vmax=self.num_class - 1)
+            ax[i][0].set_title("Ground Truth", fontsize=10, color="blue")
+            ax[i][0].axis('off')
+            ax[i][1].imshow(torch.squeeze(prediction[i]), cmap='CMRmap', vmin=0, vmax=self.num_class - 1)
+            ax[i][1].set_title("Predicted", fontsize=10, color="blue")
+            ax[i][1].axis('off')
+        fig.set_tight_layout(True)
+        self.writer[phase].add_figure('sample_prediction/' + phase, fig, epoch)
+        self.log('DONE')
 
     def image_per_epoch(self, prediction, ground_truth, phase, epoch, additional_image=None):
         self.log("Sample Images...")

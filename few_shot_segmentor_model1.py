@@ -95,8 +95,8 @@ class SDnetSegmentor(nn.Module):
         d3 = self.decode1(bn, out3, ind3)
         d2 = self.decode2(d3, out2, ind2)
         d1 = self.decode3(d2, out1, ind1)
-        if weights:
-            channels = weights.size()
+        if weights is not None:
+            channels = weights.size()[0]
             weights = weights.view(1, channels, 1, 1)
             logit = F.conv2d(d1, weights)
         prob = self.sigmoid(logit)

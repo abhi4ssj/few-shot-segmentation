@@ -5,24 +5,34 @@ import numpy as np
 import torch
 import torch.utils.data as data
 import scipy.io as sio
-import preprocessor as preprocessor
+import utils.preprocessor as preprocessor
+import math
 from torchvision import transforms
+
 
 # import utils.preprocessor as preprocessor
 
 
-transform_train = transforms.Compose([
-    transforms.RandomCrop((480, 220), padding=(32, 36)),
-    transforms.ToTensor(),
-])
+# transform_train = transforms.Compose([
+#     transforms.RandomCrop((480, 220), padding=(32, 36)),
+#     transforms.ToTensor(),
+# ])
 
 
 class ImdbData(data.Dataset):
     def __init__(self, X, y, w, transforms=None):
+        # TODO:Improve later
+        # lung_mask_1 = (y == 4)
+        # lung_mask_2 = (y == 5)
+        # lung_mask = 0.5 * (lung_mask_1 + lung_mask_2)
+        # X = X + lung_mask
+
         self.X = X if len(X.shape) == 4 else X[:, np.newaxis, :, :]
         self.y = y
         self.w = w
         self.transforms = transforms
+
+
 
     def __getitem__(self, index):
         img = torch.from_numpy(self.X[index])
@@ -45,8 +55,7 @@ def get_imdb_dataset(data_params):
     class_weight_test = h5py.File(os.path.join(data_params['data_dir'], data_params['test_class_weights_file']), 'r')
     weight_test = h5py.File(os.path.join(data_params['data_dir'], data_params['test_weights_file']), 'r')
 
-    return (ImdbData(data_train['data'][()], label_train['label'][()], class_weight_train['class_weights'][()],
-                     transforms=transform_train),
+    return (ImdbData(data_train['data'][()], label_train['label'][()], class_weight_train['class_weights'][()]),
             ImdbData(data_test['data'][()], label_test['label'][()], class_weight_test['class_weights'][()]))
 
 
