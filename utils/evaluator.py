@@ -6,6 +6,7 @@ import torch
 
 import utils.common_utils as common_utils
 import utils.data_utils as du
+import torch.nn.functional as F
 import shot_batch_sampler as SB
 
 
@@ -69,6 +70,7 @@ def evaluate_dice_score(model_path,
     print("**Starting evaluation. Please check tensorboard for plots if a logWriter is provided in arguments**")
     print("Loading model => " + model_path)
     batch_size = 10
+    # Num_support = 6
 
     with open(query_txt_file) as file_handle:
         volumes_query = file_handle.read().splitlines()
@@ -104,6 +106,8 @@ def evaluate_dice_score(model_path,
                 support_volume, support_labelmap = torch.tensor(support_volume).type(torch.FloatTensor), torch.tensor(
                     support_labelmap).type(torch.LongTensor)
                 support_volume = binarize_label(support_volume, support_labelmap, query_label)
+                # sz = support_volume.size()
+                # slice_gap = sz[0] // Num_support
 
             for vol_idx, file_path in enumerate(query_file_paths):
                 query_volume, query_labelmap, _, _ = du.load_and_preprocess(file_path,
@@ -115,20 +119,31 @@ def evaluate_dice_score(model_path,
                     query_labelmap).type(torch.LongTensor)
 
                 query_labelmap = query_labelmap == query_label
-
+                support_batch_x = []
+                k = 10
                 volume_prediction = []
                 for i in range(0, len(query_volume), batch_size):
                     query_batch_x = query_volume[i: i + batch_size]
-                    support_batch_x = support_volume[i: i + batch_size]
-
+                    if k % 10 == 0:
+                        support_batch_x = support_volume[i: i + batch_size]
+                    sz = query_batch_x.size()
+                    support_batch_x = support_batch_x[batch_size-1].repeat(sz[0], 1, 1, 1)
+                    k += 1
                     if cuda_available:
                         query_batch_x = query_batch_x.cuda(device)
                         support_batch_x = support_batch_x.cuda(device)
 
                     weights = model.conditioner(support_batch_x)
+                    # space_w, channel_w = weights
+                    # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = space_w
+                    # e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c = channel_w
+                    # # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
+                    # space_w = [e_w1, e_w2, None, None, None, d_w2, d_w1, cls_w]
+                    # channel_w = [e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c]
+                    # weights = (space_w, channel_w)
                     out = model.segmentor(query_batch_x, weights)
 
-                    _, batch_output = torch.max(out, dim=1)
+                    _, batch_output = torch.max(F.softmax(out, dim=1), dim=1)
                     volume_prediction.append(batch_output)
 
                 volume_prediction = torch.cat(volume_prediction)
@@ -138,10 +153,16 @@ def evaluate_dice_score(model_path,
                 nifti_img = nib.MGHImage(np.squeeze(volume_prediction), np.eye(4))
                 nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_' + fold + str('.mgz')))
 
-                # Save Input
+                # # Save Input
                 nifti_img = nib.MGHImage(np.squeeze(query_volume.cpu().numpy()), np.eye(4))
                 nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_Input_' + str('.mgz')))
-                # Save Ground Truth
+                # # Condition Input
+                nifti_img = nib.MGHImage(np.squeeze(support_volume.cpu().numpy()), np.eye(4))
+                nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_CondInput_' + str('.mgz')))
+                # # Cond GT
+                nifti_img = nib.MGHImage(np.squeeze(support_labelmap.cpu().numpy()).astype('float32'), np.eye(4))
+                nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_CondInputGT_' + str('.mgz')))
+                # # # Save Ground Truth
                 nifti_img = nib.MGHImage(np.squeeze(query_labelmap.cpu().numpy()), np.eye(4))
                 nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_GT_' + str('.mgz')))
 
@@ -154,7 +175,7 @@ def evaluate_dice_score(model_path,
                 print(volume_dice_score)
 
             dice_score_arr = np.asarray(volume_dice_score_list)
-            avg_dice_score = np.mean(dice_score_arr)
+            avg_dice_score = np.median(dice_score_arr)
             print('Query Label -> ' + str(query_label) + ' ' + str(avg_dice_score))
             all_query_dice_score_list.append(avg_dice_score)
         # class_dist = [dice_score_arr[:, c] for c in range(num_classes)]

@@ -19,67 +19,107 @@ class SDnetConditioner(nn.Module):
         params['num_channels'] = 1
         params['num_filters'] = 64
         self.encode1 = sm.SDnetEncoderBlock(params)
+        self.channel_conv_e1 = nn.Linear(params['num_filters'], params['num_filters'], bias=True)
         self.squeeze_conv_e1 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
                                        kernel_size=(1, 1),
                                        padding=(0, 0),
                                        stride=1)
         params['num_channels'] = 64
         self.encode2 = sm.SDnetEncoderBlock(params)
+        self.channel_conv_e2 = nn.Linear(params['num_filters'], params['num_filters'], bias=True)
         self.squeeze_conv_e2 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
                                        kernel_size=(1, 1),
                                        padding=(0, 0),
                                        stride=1)
         self.encode3 = sm.SDnetEncoderBlock(params)
+        self.channel_conv_e3 = nn.Linear(params['num_filters'], params['num_filters'], bias=True)
         self.squeeze_conv_e3 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
                                        kernel_size=(1, 1),
                                        padding=(0, 0),
                                        stride=1)
         self.bottleneck = sm.GenericBlock(params)
+        self.channel_conv_bn = nn.Linear(params['num_filters'], params['num_filters'], bias=True)
         self.squeeze_conv_bn = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
                                        kernel_size=(1, 1),
                                        padding=(0, 0),
                                        stride=1)
         params['num_channels'] = 128
         self.decode1 = sm.SDnetDecoderBlock(params)
+        self.channel_conv_d1 = nn.Linear(params['num_filters'], params['num_filters'], bias=True)
         self.squeeze_conv_d1 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
                                        kernel_size=(1, 1),
                                        padding=(0, 0),
                                        stride=1)
         self.decode2 = sm.SDnetDecoderBlock(params)
+        self.channel_conv_d2 = nn.Linear(params['num_filters'], params['num_filters'], bias=True)
         self.squeeze_conv_d2 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
                                        kernel_size=(1, 1),
                                        padding=(0, 0),
                                        stride=1)
         self.decode3 = sm.SDnetDecoderBlock(params)
+        self.channel_conv_d3 = nn.Linear(params['num_filters'], params['num_filters'], bias=True)
         self.squeeze_conv_d3 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
                                        kernel_size=(1, 1),
                                        padding=(0, 0),
                                        stride=1)
         params['num_channels'] = 64
         self.classifier = sm.ClassifierBlock(params)
+        self.channel_conv_cls = nn.Linear(params['num_class'], params['num_class'], bias=True)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, input):
         e1, out1, ind1 = self.encode1(input)
+        num_batch, ch, _, _ = e1.size()
         e_w1 = self.sigmoid(self.squeeze_conv_e1(e1))
+        e_c1 = self.sigmoid(self.channel_conv_e1(e1.view(num_batch, ch, -1).mean(dim=2)))
+        e_c1 = e_c1.view(num_batch, ch, 1, 1)
+
         e2, out2, ind2 = self.encode2(e1)
+        num_batch, ch, _, _ = e2.size()
         e_w2 = self.sigmoid(self.squeeze_conv_e2(e2))
+        e_c2 = self.sigmoid(self.channel_conv_e2(e2.view(num_batch, ch, -1).mean(dim=2)))
+        e_c2 = e_c2.view(num_batch, ch, 1, 1)
+
         e3, out3, ind3 = self.encode3(e2)
+        num_batch, ch, _, _ = e3.size()
         e_w3 = self.sigmoid(self.squeeze_conv_e3(e3))
+        e_c3 = self.sigmoid(self.channel_conv_e3(e3.view(num_batch, ch, -1).mean(dim=2)))
+        e_c3 = e_c3.view(num_batch, ch, 1, 1)
 
         bn = self.bottleneck(e3)
+        num_batch, ch, _, _ = bn.size()
         bn_w = self.sigmoid(self.squeeze_conv_bn(bn))
+        bn_c = self.sigmoid(self.channel_conv_bn(bn.view(num_batch, ch, -1).mean(dim=2)))
+        bn_c = bn_c.view(num_batch, ch, 1, 1)
 
         d3 = self.decode1(bn, out3, ind3)
+        num_batch, ch, _, _ = d3.size()
         d_w3 = self.sigmoid(self.squeeze_conv_d3(d3))
-        d2 = self.decode2(d3, out2, ind2)
-        d_w2 = self.sigmoid(self.squeeze_conv_d2(d2))
-        d1 = self.decode3(d2, out1, ind1)
-        d_w1 = self.sigmoid(self.squeeze_conv_d1(d1))
-        logit = self.classifier.forward(d1)
-        cls_w = self.sigmoid(logit)
+        d_c3 = self.sigmoid(self.channel_conv_d3(d3.view(num_batch, ch, -1).mean(dim=2)))
+        d_c3 = d_c3.view(num_batch, ch, 1, 1)
 
-        return e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w
+        d2 = self.decode2(d3, out2, ind2)
+        num_batch, ch, _, _ = d2.size()
+        d_w2 = self.sigmoid(self.squeeze_conv_d2(d2))
+        d_c2 = self.sigmoid(self.channel_conv_d2(d2.view(num_batch, ch, -1).mean(dim=2)))
+        d_c2 = d_c2.view(num_batch, ch, 1, 1)
+
+        d1 = self.decode3(d2, out1, ind1)
+        num_batch, ch, _, _ = d1.size()
+        d_w1 = self.sigmoid(self.squeeze_conv_d1(d1))
+        d_c1 = self.sigmoid(self.channel_conv_d1(d1.view(num_batch, ch, -1).mean(dim=2)))
+        d_c1 = d_c1.view(num_batch, ch, 1, 1)
+
+        logit = self.classifier.forward(d1)
+        num_batch, ch, _, _ = logit.size()
+        cls_w = self.sigmoid(logit)
+        cls_c = self.sigmoid(self.channel_conv_cls(logit.view(num_batch, ch, -1).mean(dim=2)))
+        cls_c = cls_c.view(num_batch, ch, 1, 1)
+
+        space_w = (e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w)
+        channel_w = (e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c)
+
+        return space_w, channel_w
 
 
 class SDnetSegmentor(nn.Module):
@@ -120,36 +160,93 @@ class SDnetSegmentor(nn.Module):
         # self.sigmoid = nn.Sigmoid()
 
     def forward(self, inpt, weights=None):
-        e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights if weights is not None else (
-            None, None, None, None, None, None, None, None)
+        if weights is not None:
+            space_w, channel_w = weights
+            e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = space_w if space_w is not None else (
+                None, None, None, None, None, None, None, None)
+            e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c = channel_w if channel_w is not None else (
+                None, None, None, None, None, None, None, None)
+
         e1, out1, ind1 = self.encode1(inpt)
-        if e_w1 is not None:
+        if e_w1 is not None and e_c1 is None:
             e1 = torch.mul(e1, e_w1)
+        if e_w1 is None and e_c1 is not None:
+            e1 = torch.mul(e1, e_c1)
+        if e_w1 is not None and e_c1 is not None:
+            es1 = torch.mul(e1, e_w1)
+            ec1 = torch.mul(e1, e_c1)
+            e1 = torch.max(es1, ec1)
+
         e2, out2, ind2 = self.encode2(e1)
-        if e_w2 is not None:
+        if e_w2 is not None and e_c2 is None:
             e2 = torch.mul(e2, e_w2)
+        if e_w2 is None and e_c2 is not None:
+            e2 = torch.mul(e2, e_c2)
+        if e_w2 is not None and e_c2 is not None:
+            es2 = torch.mul(e2, e_w2)
+            ec2 = torch.mul(e2, e_c2)
+            e2 = torch.max(es2, ec2)
+
         e3, out3, ind3 = self.encode3(e2)
-        if e_w3 is not None:
+        if e_w3 is not None and e_c3 is None:
             e3 = torch.mul(e3, e_w3)
+        if e_w3 is None and e_c3 is not None:
+            e3 = torch.mul(e3, e_c3)
+        if e_w3 is not None and e_c3 is not None:
+            es3 = torch.mul(e3, e_w3)
+            ec3 = torch.mul(e3, e_c3)
+            e3 = torch.max(es3, ec3)
 
         bn = self.bottleneck(e3)
-        if bn_w is not None:
+        if bn_w is not None and bn_c is None:
             bn = torch.mul(bn, bn_w)
+        if bn_w is None and bn_c is not None:
+            bn = torch.mul(bn, bn_c)
+        if bn_w is not None and bn_c is not None:
+            bns = torch.mul(bn, bn_w)
+            bnc = torch.mul(bn, bn_c)
+            bn = torch.max(bns, bnc)
 
         d3 = self.decode1(bn, out3, ind3)
-        if d_w3 is not None:
+        if d_w3 is not None and d_c3 is None:
             d3 = torch.mul(d3, d_w3)
+        if d_w3 is None and d_c3 is not None:
+            d3 = torch.mul(d3, d_c3)
+        if d_w3 is not None and d_c3 is not None:
+            ds3 = torch.mul(d3, d_w3)
+            dc3 = torch.mul(d3, d_c3)
+            d3 = torch.max(ds3, dc3)
 
         d2 = self.decode2(d3, out2, ind2)
-        if d_w2 is not None:
+        if d_w2 is not None and d_c2 is None:
             d2 = torch.mul(d2, d_w2)
+        if d_w2 is None and d_c2 is not None:
+            d2 = torch.mul(d2, d_c2)
+        if d_w2 is not None and d_c2 is not None:
+            ds2 = torch.mul(d2, d_w2)
+            dc2 = torch.mul(d2, d_c2)
+            d2 = torch.max(ds2, dc2)
 
         d1 = self.decode3(d2, out1, ind1)
-        if d_w1 is not None:
+        if d_w1 is not None and d_c1 is None:
             d1 = torch.mul(d1, d_w1)
+        if d_w1 is None and d_c1 is not None:
+            d1 = torch.mul(d1, d_c1)
+        if d_w1 is not None and d_c1 is not None:
+            ds1 = torch.mul(d1, d_w1)
+            dc1 = torch.mul(d1, d_c1)
+            d1 = torch.max(ds1, dc1)
+
         logit = self.classifier.forward(d1)
-        if cls_w is not None:
+        if cls_w is not None and cls_c is None:
             logit = torch.mul(logit, cls_w)
+        if cls_w is None and cls_c is not None:
+            logit = torch.mul(logit, cls_c)
+        if cls_w is not None and cls_c is not None:
+            logit_s = torch.mul(logit, cls_w)
+            logit_c = torch.mul(logit, cls_c)
+            logit = torch.max(logit_s, logit_c)
+
         logit = self.soft_max(logit)
 
         return logit

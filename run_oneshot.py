@@ -15,7 +15,9 @@ import few_shot_segmentor_model7 as fs7
 import few_shot_segmentor_model8 as fs8
 import few_shot_segmentor_model9 as fs9
 import few_shot_segmentor_model10 as fs10
+import few_shot_segmentor_model11 as fs11
 from settings import Settings
+# from solver_oneshot_singleOpti import Solver
 from solver_oneshot_multiOpti_auto import Solver
 from utils.data_utils import get_imdb_dataset
 from utils.log_utils import LogWriter
@@ -44,8 +46,8 @@ class Identity(nn.Module):
 def train(train_params, common_params, data_params, net_params):
     train_data, test_data = load_data(data_params)
 
-    folds = ['fold1', 'fold2', 'fold4', 'fold5']
-    model_prefix = 'model10_finetuning_'
+    folds = ['fold1']
+    model_prefix = 'model11_bn_cSE_all_scSE_multi_opti_lowCon_'
     for fold in folds:
         final_model_path = os.path.join(common_params['save_model_dir'], model_prefix + fold + '.pth.tar')
 
@@ -59,16 +61,17 @@ def train(train_params, common_params, data_params, net_params):
         train_loader = torch.utils.data.DataLoader(train_data, batch_sampler=train_sampler)
         val_loader = torch.utils.data.DataLoader(test_data, batch_sampler=test_sampler)
 
-        segmentor_pretrained = torch.load(train_params['pre_trained_path'])
-
+        # segmentor_pretrained = torch.load(train_params['pre_trained_path'])
+        # conditioner_pretrained = torch.load(train_params['pre_trained_path'])
         # segmentor_pretrained.classifier = Identity()
         # segmentor_pretrained.sigmoid = Identity()
 
         # for param in segmentor_pretrained.parameters():
         #     param.requires_grad = False
 
-        few_shot_model = fs10.FewShotSegmentorDoubleSDnet(net_params)
-        few_shot_model.segmentor = segmentor_pretrained
+        few_shot_model = fs11.FewShotSegmentorDoubleSDnet(net_params)
+        # few_shot_model.segmentor = segmentor_pretrained
+        # few_shot_model.conditioner = conditioner_pretrained
 
         solver = Solver(few_shot_model,
                         device=common_params['device'],
@@ -115,8 +118,8 @@ def evaluate(eval_params, net_params, data_params, common_params, train_params):
 
     logWriter = LogWriter(num_classes, log_dir, exp_name, labels=labels)
 
-    model_name = 'model6_reduced_labels'
-    folds = ['fold3', 'fold4']
+    model_name = 'model6'
+    folds = ['fold1']
 
     for fold in folds:
         eval_model_path = os.path.join('saved_models', model_name + '_' + fold + '.pth.tar')

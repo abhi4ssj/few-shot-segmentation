@@ -47,21 +47,15 @@ class Solver(object):
         else:
             self.loss_func = loss_func
 
-        # self.optim = optim(model.parameters(), **optim_args)
+        self.optim = optim([{'params': model.squeeze_conv_bn.parameters()},
+                            {'params': model.squeeze_conv_d1.parameters()},
+                            {'params': model.squeeze_conv_d2.parameters()},
+                            {'params': model.squeeze_conv_d3.parameters()},
+                            {'params': model.conditioner.parameters(), 'lr': 1e-2, 'momentum': 0.95, 'weight_decay': 0.001},
+                            {'params': model.segmentor.parameters(), 'lr': 1e-2, 'momentum': 0.95,
+                             'weight_decay': 0.001}], **optim_args)
 
-        self.optim_c = optim(
-            [{'params': model.conditioner.parameters(), 'lr': 1e-2, 'momentum': 0.95, 'weight_decay': 0.001}
-             ], **optim_args)
-
-        self.optim_s = optim(
-            [{'params': model.segmentor.parameters(), 'lr': 1e-1, 'momentum': 0.95, 'weight_decay': 0.001}
-             ], **optim_args)
-
-        # self.scheduler = lr_scheduler.StepLR(self.optim, step_size=5,
-        #                                        gamma=0.1)
-        self.scheduler_s = lr_scheduler.StepLR(self.optim_s, step_size=5,
-                                               gamma=0.1)
-        self.scheduler_c = lr_scheduler.StepLR(self.optim_c, step_size=5,
+        self.scheduler = lr_scheduler.StepLR(self.optim, step_size=2,
                                                gamma=0.1)
 
         exp_dir_path = os.path.join(exp_dir, exp_name)
@@ -90,7 +84,7 @@ class Solver(object):
         - train_loader: train data in torch.utils.data.DataLoader
         - val_loader: val data in torch.utils.data.DataLoader
         """
-        model, optim_c, optim_s, scheduler_c, scheduler_s = self.model, self.optim_c, self.optim_s, self.scheduler_c, self.scheduler_s
+        model, optim, scheduler = self.model, self.optim, self.scheduler
 
         data_loader = {
             'train': train_loader,
@@ -104,19 +98,12 @@ class Solver(object):
         self.logWriter.log('START TRAINING. : model name = %s, device = %s' % (
             self.model_name, torch.cuda.get_device_name(self.device)))
         current_iteration = self.start_iteration
-        warm_up_epoch = 3
+        warm_up_epoch = 5
         val_old = 0
         change_model = False
         current_model = 'seg'
         for epoch in range(self.start_epoch, self.num_epochs + 1):
             self.logWriter.log('train', "\n==== Epoch [ %d  /  %d ] START ====" % (epoch, self.num_epochs))
-            if epoch > warm_up_epoch:
-                if current_model == 'seg':
-                    self.logWriter.log("Optimizing Segmentor")
-                    optim = optim_s
-                elif current_model == 'con':
-                    optim = optim_c
-                    self.logWriter.log("Optimizing Conditioner")
 
             for phase in ['train', 'val']:
                 self.logWriter.log("<<<= Phase: %s =>>>" % phase)
@@ -129,8 +116,7 @@ class Solver(object):
 
                 if phase == 'train':
                     model.train()
-                    scheduler_c.step()
-                    scheduler_s.step()
+                    scheduler.step()
                 else:
                     model.eval()
                 for i_batch, sampled_batch in enumerate(data_loader[phase]):
@@ -142,47 +128,22 @@ class Solver(object):
 
                     input1, input2, y1, y2 = split_batch(X, y, int(query_label))
 
-                    # sim_list = self.get_similarity_idx(y1, y2)
-                    # condition_input = torch.cat((input1, y1.unsqueeze(1)), dim=1)
-                    # TODO: Reverse Contrast
                     condition_input = torch.mul(input1, y1.unsqueeze(1))
-                    # condition_input_2 = torch.mul((1-input1), y1.unsqueeze(1))
-                    # condition_input = torch.cat((condition_input_1, condition_input_2), dim=1)
                     query_input = input2
 
                     if model.is_cuda:
-                        condition_input, query_input, y2 = condition_input.cuda(self.device,
-                                                                                non_blocking=True), query_input.cuda(
+                        condition_input, query_input, y2 = condition_input.cuda(self.device, non_blocking=True), query_input.cuda(
                             self.device,
                             non_blocking=True), y2.cuda(
                             self.device, non_blocking=True)
 
-                    # output = model(condition_input, query_input)
-
-                    weights = model.conditioner(condition_input)
-                    space_w, channel_w = weights
-                    e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = space_w
-                    e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c = channel_w
-                    # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
-                    space_w = [e_w1, e_w2, None, None, None, d_w2, d_w1, cls_w]
-                    channel_w = [e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c]
-                    weights = (space_w, channel_w)
-                    output = model.segmentor(query_input, weights)
+                    output = model(condition_input, query_input)
                     # TODO: add weights
-                    loss = self.loss_func(F.softmax(output, dim=1), y2)
-                    optim_s.zero_grad()
-                    optim_c.zero_grad()
+                    loss = self.loss_func(output, y2)
+                    optim.zero_grad()
                     loss.backward()
                     if phase == 'train':
-                        if epoch <= warm_up_epoch:
-                            optim_s.step()
-                            optim_c.step()
-                        elif epoch > warm_up_epoch and change_model:
-                            optim.step()
-
-                        # # TODO: value needs to be optimized, Gradient Clipping (Optional)
-                        # if epoch > 1:
-                        #     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.0001)
+                        optim.step()
 
                         if i_batch % self.log_nth == 0:
                             self.logWriter.loss_per_iter(loss.item(), i_batch, current_iteration)
@@ -213,10 +174,8 @@ class Solver(object):
                         'start_iteration': current_iteration + 1,
                         'arch': self.model_name,
                         'state_dict': model.state_dict(),
-                        'optimizer_c': optim_c.state_dict(),
-                        'scheduler_c': scheduler_c.state_dict(),
-                        'optimizer_s': optim_s.state_dict(),
-                        'scheduler_s': scheduler_s.state_dict()
+                        'optimizer': optim.state_dict(),
+                        'scheduler': scheduler.state_dict(),
                     }, os.path.join(self.exp_dir_path, CHECKPOINT_DIR,
                                     'checkpoint_epoch_' + str(epoch) + '.' + CHECKPOINT_EXTENSION))
 
@@ -262,21 +221,14 @@ class Solver(object):
             self.start_epoch = checkpoint['epoch']
             self.start_iteration = checkpoint['start_iteration']
             self.model.load_state_dict(checkpoint['state_dict'])
-            self.optim_c.load_state_dict(checkpoint['optimizer_c'])
-            self.optim_s.load_state_dict(checkpoint['optimizer_s'])
+            self.optim.load_state_dict(checkpoint['optimizer'])
 
-            for state in self.optim_c.state.values():
+            for state in self.optim.state.values():
                 for k, v in state.items():
                     if torch.is_tensor(v):
                         state[k] = v.to(self.device)
 
-            for state in self.optim_s.state.values():
-                for k, v in state.items():
-                    if torch.is_tensor(v):
-                        state[k] = v.to(self.device)
-
-            self.scheduler_c.load_state_dict(checkpoint['scheduler_c'])
-            self.scheduler_s.load_state_dict(checkpoint['scheduler_s'])
+            self.scheduler.load_state_dict(checkpoint['scheduler'])
             self.logWriter.log("=> loaded checkpoint '{}' (epoch {})".format(latest_file, checkpoint['epoch']))
         else:
             self.logWriter.log(

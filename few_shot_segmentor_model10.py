@@ -124,7 +124,7 @@ class SDnetSegmentor(nn.Module):
     def forward(self, inpt, weights=None):
 
         e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights if weights is not None else (
-        None, None, None, None, None, None, None, None)
+            None, None, None, None, None, None, None, None)
         e1, out1, ind1 = self.encode1(inpt)
         if e_w1 is not None:
             e1 = torch.mul(e1, e_w1)
@@ -164,14 +164,54 @@ class FewShotSegmentorDoubleSDnet(nn.Module):
 
     def __init__(self, params):
         super(FewShotSegmentorDoubleSDnet, self).__init__()
-        self.conditioner = SDnetConditioner(params)
+        self.conditioner = SDnetSegmentor(params)
         self.segmentor = SDnetSegmentor(params)
         self.sigmoid = nn.Sigmoid()
 
+        self.squeeze_conv_e1 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
+        self.squeeze_conv_e2 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
+        self.squeeze_conv_e3 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
+        self.squeeze_conv_bn = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
+        self.squeeze_conv_d1 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
+        self.squeeze_conv_d2 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
+        self.squeeze_conv_d3 = nn.Conv2d(in_channels=params['num_filters'], out_channels=1,
+                                         kernel_size=(1, 1),
+                                         padding=(0, 0),
+                                         stride=1)
+
     def forward(self, input1, input2):
-        weights = self.sigmoid(self.conditioner(input1))
-        segment = self.segmentor(input2, weights)
-        return segment
+        e1_c, e2_c, e3_c, bn_c, d3_c, d2_c, d1_c, logit_c = self.conditioner(input1)
+        e_w1 = self.sigmoid(self.squeeze_conv_e1(e1_c))
+        e_w2 = self.sigmoid(self.squeeze_conv_e1(e2_c))
+        e_w3 = self.sigmoid(self.squeeze_conv_e1(e3_c))
+        bn_w = self.sigmoid(self.squeeze_conv_e1(bn_c))
+        d_w3 = self.sigmoid(self.squeeze_conv_e1(d3_c))
+        d_w2 = self.sigmoid(self.squeeze_conv_e1(d2_c))
+        d_w1 = self.sigmoid(self.squeeze_conv_e1(d1_c))
+        cls_w = self.sigmoid(logit_c)
+
+        # weights = [e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w]
+        weights = [None, None, None, bn_w, d_w3, d_w2, d_w1, None]
+        e1_s, e2_s, e3_s, bn_s, d3_s, d2_s, d1_s, logit_s = self.segmentor(input2, weights)
+        return logit_s
 
     def enable_test_dropout(self):
         attr_dict = self.__dict__['_modules']
