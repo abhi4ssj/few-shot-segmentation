@@ -25,7 +25,7 @@ class Solver(object):
                  num_class,
                  optim=torch.optim.SGD,
                  optim_args={},
-                 loss_func=losses.DiceLoss(),
+                 loss_func=losses.IoULoss(),
                  model_name='OneShotSegmentor',
                  labels=None,
                  num_epochs=10,
@@ -54,15 +54,15 @@ class Solver(object):
              ], **optim_args)
 
         self.optim_s = optim(
-            [{'params': model.segmentor.parameters(), 'lr': 1e-1, 'momentum': 0.95, 'weight_decay': 0.001}
+            [{'params': model.segmentor.parameters(), 'lr': 1e-2, 'momentum': 0.95, 'weight_decay': 0.001}
              ], **optim_args)
 
         # self.scheduler = lr_scheduler.StepLR(self.optim, step_size=5,
         #                                        gamma=0.1)
-        self.scheduler_s = lr_scheduler.StepLR(self.optim_s, step_size=5,
-                                               gamma=0.1)
-        self.scheduler_c = lr_scheduler.StepLR(self.optim_c, step_size=5,
-                                               gamma=0.1)
+        self.scheduler_s = lr_scheduler.StepLR(self.optim_s, step_size=1,
+                                               gamma=0.5)
+        self.scheduler_c = lr_scheduler.StepLR(self.optim_c, step_size=1,
+                                               gamma=0.5)
 
         exp_dir_path = os.path.join(exp_dir, exp_name)
         common_utils.create_if_not(exp_dir_path)
@@ -104,7 +104,7 @@ class Solver(object):
         self.logWriter.log('START TRAINING. : model name = %s, device = %s' % (
             self.model_name, torch.cuda.get_device_name(self.device)))
         current_iteration = self.start_iteration
-        warm_up_epoch = 3
+        warm_up_epoch = 2
         val_old = 0
         change_model = False
         current_model = 'seg'
@@ -160,13 +160,13 @@ class Solver(object):
                     # output = model(condition_input, query_input)
 
                     weights = model.conditioner(condition_input)
-                    space_w, channel_w = weights
-                    e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = space_w
-                    e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c = channel_w
-                    # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
-                    space_w = [e_w1, e_w2, None, None, None, d_w2, d_w1, cls_w]
-                    channel_w = [e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c]
-                    weights = (space_w, channel_w)
+                    # space_w, channel_w = weights
+                    # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = space_w
+                    # e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c = channel_w
+                    # # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
+                    # space_w = [e_w1, e_w2, None, None, None, d_w2, d_w1, cls_w]
+                    # channel_w = [e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c]
+                    # weights = (space_w, channel_w)
                     output = model.segmentor(query_input, weights)
                     # TODO: add weights
                     loss = self.loss_func(F.softmax(output, dim=1), y2)
