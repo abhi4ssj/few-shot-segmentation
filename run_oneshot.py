@@ -47,7 +47,7 @@ def train(train_params, common_params, data_params, net_params):
     train_data, test_data = load_data(data_params)
 
     folds = ['fold1']
-    model_prefix = 'model6_IOUloss_'
+    model_prefix = 'model6_Focal_loss_noClsLastDec_'
     for fold in folds:
         final_model_path = os.path.join(common_params['save_model_dir'], model_prefix + fold + '.pth.tar')
 
@@ -70,7 +70,7 @@ def train(train_params, common_params, data_params, net_params):
         #     param.requires_grad = False
 
         few_shot_model = fs6.FewShotSegmentorDoubleSDnet(net_params)
-        # few_shot_model.segmentor = segmentor_pretrained
+        # few_shot_model = segmentor_pretrained
         # few_shot_model.conditioner = conditioner_pretrained
 
         solver = Solver(few_shot_model,
@@ -118,10 +118,10 @@ def evaluate(eval_params, net_params, data_params, common_params, train_params):
 
     logWriter = LogWriter(num_classes, log_dir, exp_name, labels=labels)
 
-    model_name = 'model6'
+    model_name = 'model6_Dice_L2_loss_target_fold1.pth.tar'
     folds = ['fold1']
 
-    eval_model_path1 = "saved_models/model6_fold1.pth.tar"
+    eval_model_path1 = "saved_models/model6_Dice_L2_loss_target_fold1.pth.tar"
     eval_model_path2 = "saved_models/model6_coronal_fold1.pth.tar"
     eval_model_path3 = "saved_models/model6_sagittal_fold1.pth.tar"
 
@@ -132,6 +132,18 @@ def evaluate(eval_params, net_params, data_params, common_params, train_params):
         eval_model_path = os.path.join('saved_models', model_name + '_' + fold + '.pth.tar')
         query_labels = get_lab_list('val', fold)
         num_classes = len(fold)
+
+        avg_dice_score = eu.evaluate_dice_score(eval_model_path1,
+                                                num_classes,
+                                                query_labels,
+                                                data_dir,
+                                                query_txt_file,
+                                                support_txt_file,
+                                                remap_config,
+                                                orientaion1,
+                                                prediction_path,
+                                                device,
+                                                logWriter, fold=fold)
 
         # avg_dice_score = eu.evaluate_dice_score_3view(eval_model_path1,
         #                                               eval_model_path2,
@@ -146,18 +158,18 @@ def evaluate(eval_params, net_params, data_params, common_params, train_params):
         #                                               prediction_path,
         #                                               device,
         #                                               logWriter, fold=fold)
-        avg_dice_score = eu.evaluate_dice_score_2view(eval_model_path1,
-                                                      eval_model_path2,
-                                                      num_classes,
-                                                      query_labels,
-                                                      data_dir,
-                                                      query_txt_file,
-                                                      support_txt_file,
-                                                      remap_config,
-                                                      orientaion1,
-                                                      prediction_path,
-                                                      device,
-                                                      logWriter, fold=fold)
+        # avg_dice_score = eu.evaluate_dice_score_2view(eval_model_path1,
+        #                                               eval_model_path2,
+        #                                               num_classes,
+        #                                               query_labels,
+        #                                               data_dir,
+        #                                               query_txt_file,
+        #                                               support_txt_file,
+        #                                               remap_config,
+        #                                               orientaion1,
+        #                                               prediction_path,
+        #                                               device,
+        #                                               logWriter, fold=fold)
 
         logWriter.log(avg_dice_score)
     logWriter.close()
