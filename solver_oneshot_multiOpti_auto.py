@@ -25,7 +25,7 @@ class Solver(object):
                  num_class,
                  optim=torch.optim.SGD,
                  optim_args={},
-                 loss_func=losses.IoULoss(),
+                 loss_func=losses.CombinedLoss(),
                  model_name='OneShotSegmentor',
                  labels=None,
                  num_epochs=10,
@@ -50,18 +50,18 @@ class Solver(object):
         # self.optim = optim(model.parameters(), **optim_args)
 
         self.optim_c = optim(
-            [{'params': model.conditioner.parameters(), 'lr': 1e-2, 'momentum': 0.95, 'weight_decay': 0.001}
+            [{'params': model.conditioner.parameters(), 'lr': 1e-15, 'momentum': 0.95, 'weight_decay': 0.001}
              ], **optim_args)
 
         self.optim_s = optim(
-            [{'params': model.segmentor.parameters(), 'lr': 1e-2, 'momentum': 0.95, 'weight_decay': 0.001}
+            [{'params': model.segmentor.parameters(), 'lr': 1e-15, 'momentum': 0.95, 'weight_decay': 0.001}
              ], **optim_args)
 
         # self.scheduler = lr_scheduler.StepLR(self.optim, step_size=5,
         #                                        gamma=0.1)
-        self.scheduler_s = lr_scheduler.StepLR(self.optim_s, step_size=1,
+        self.scheduler_s = lr_scheduler.StepLR(self.optim_s, step_size=4,
                                                gamma=0.5)
-        self.scheduler_c = lr_scheduler.StepLR(self.optim_c, step_size=1,
+        self.scheduler_c = lr_scheduler.StepLR(self.optim_c, step_size=4,
                                                gamma=0.5)
 
         exp_dir_path = os.path.join(exp_dir, exp_name)
@@ -104,7 +104,7 @@ class Solver(object):
         self.logWriter.log('START TRAINING. : model name = %s, device = %s' % (
             self.model_name, torch.cuda.get_device_name(self.device)))
         current_iteration = self.start_iteration
-        warm_up_epoch = 2
+        warm_up_epoch = 3
         val_old = 0
         change_model = False
         current_model = 'seg'
@@ -149,12 +149,14 @@ class Solver(object):
                     # condition_input_2 = torch.mul((1-input1), y1.unsqueeze(1))
                     # condition_input = torch.cat((condition_input_1, condition_input_2), dim=1)
                     query_input = input2
+                    y1 = y1.type(torch.LongTensor)
 
                     if model.is_cuda:
-                        condition_input, query_input, y2 = condition_input.cuda(self.device,
+                        condition_input, query_input, y2, y1 = condition_input.cuda(self.device,
                                                                                 non_blocking=True), query_input.cuda(
                             self.device,
                             non_blocking=True), y2.cuda(
+                            self.device, non_blocking=True), y1.cuda(
                             self.device, non_blocking=True)
 
                     # output = model(condition_input, query_input)
@@ -163,13 +165,13 @@ class Solver(object):
                     # space_w, channel_w = weights
                     # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = space_w
                     # e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c = channel_w
-                    # # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
-                    # space_w = [e_w1, e_w2, None, None, None, d_w2, d_w1, cls_w]
+                    e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
+                    weights = [e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, None, None]
                     # channel_w = [e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c]
                     # weights = (space_w, channel_w)
                     output = model.segmentor(query_input, weights)
                     # TODO: add weights
-                    loss = self.loss_func(F.softmax(output, dim=1), y2)
+                    loss = self.loss_func(F.softmax(output, dim=1), y2, y1)
                     optim_s.zero_grad()
                     optim_c.zero_grad()
                     loss.backward()

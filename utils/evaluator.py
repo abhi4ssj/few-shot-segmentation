@@ -120,11 +120,11 @@ def evaluate_dice_score(model_path,
 
                 query_labelmap = query_labelmap == query_label
                 support_batch_x = []
-                k = 10
+                k = 2
                 volume_prediction = []
                 for i in range(0, len(query_volume), batch_size):
                     query_batch_x = query_volume[i: i + batch_size]
-                    if k % 10 == 0:
+                    if k % 2 == 0:
                         support_batch_x = support_volume[i: i + batch_size]
                     sz = query_batch_x.size()
                     support_batch_x = support_batch_x[batch_size - 1].repeat(sz[0], 1, 1, 1)
@@ -141,6 +141,8 @@ def evaluate_dice_score(model_path,
                     # space_w = [e_w1, e_w2, None, None, None, d_w2, d_w1, cls_w]
                     # channel_w = [e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c]
                     # weights = (space_w, channel_w)
+                    e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
+                    weights = [e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, None, None]
                     out = model.segmentor(query_batch_x, weights)
 
                     _, batch_output = torch.max(F.softmax(out, dim=1), dim=1)
@@ -154,18 +156,18 @@ def evaluate_dice_score(model_path,
                 nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_' + fold + str('.mgz')))
 
                 # # Save Input
-                nifti_img = nib.MGHImage(np.squeeze(query_volume.cpu().numpy()), np.eye(4))
-                nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_Input_' + str('.mgz')))
-                # # Condition Input
-                nifti_img = nib.MGHImage(np.squeeze(support_volume.cpu().numpy()), np.eye(4))
-                nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_CondInput_' + str('.mgz')))
-                # # Cond GT
-                nifti_img = nib.MGHImage(np.squeeze(support_labelmap.cpu().numpy()).astype('float32'), np.eye(4))
-                nib.save(nifti_img,
-                         os.path.join(prediction_path, volumes_query[vol_idx] + '_CondInputGT_' + str('.mgz')))
-                # # # Save Ground Truth
-                nifti_img = nib.MGHImage(np.squeeze(query_labelmap.cpu().numpy()), np.eye(4))
-                nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_GT_' + str('.mgz')))
+                # nifti_img = nib.MGHImage(np.squeeze(query_volume.cpu().numpy()), np.eye(4))
+                # nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_Input_' + str('.mgz')))
+                # # # Condition Input
+                # nifti_img = nib.MGHImage(np.squeeze(support_volume.cpu().numpy()), np.eye(4))
+                # nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_CondInput_' + str('.mgz')))
+                # # # Cond GT
+                # nifti_img = nib.MGHImage(np.squeeze(support_labelmap.cpu().numpy()).astype('float32'), np.eye(4))
+                # nib.save(nifti_img,
+                #          os.path.join(prediction_path, volumes_query[vol_idx] + '_CondInputGT_' + str('.mgz')))
+                # # # # Save Ground Truth
+                # nifti_img = nib.MGHImage(np.squeeze(query_labelmap.cpu().numpy()), np.eye(4))
+                # nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_GT_' + str('.mgz')))
 
                 # if logWriter:
                 #     logWriter.plot_dice_score('val', 'eval_dice_score', volume_dice_score, volumes_to_use[vol_idx],
