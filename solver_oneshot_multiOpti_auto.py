@@ -50,11 +50,11 @@ class Solver(object):
         # self.optim = optim(model.parameters(), **optim_args)
 
         self.optim_c = optim(
-            [{'params': model.conditioner.parameters(), 'lr': 1e-15, 'momentum': 0.95, 'weight_decay': 0.001}
+            [{'params': model.conditioner.parameters(), 'lr': 1e-2, 'momentum': 0.95, 'weight_decay': 0.0001}
              ], **optim_args)
 
         self.optim_s = optim(
-            [{'params': model.segmentor.parameters(), 'lr': 1e-15, 'momentum': 0.95, 'weight_decay': 0.001}
+            [{'params': model.segmentor.parameters(), 'lr': 1e-2, 'momentum': 0.95, 'weight_decay': 0.0001}
              ], **optim_args)
 
         # self.scheduler = lr_scheduler.StepLR(self.optim, step_size=5,
@@ -153,7 +153,7 @@ class Solver(object):
 
                     if model.is_cuda:
                         condition_input, query_input, y2, y1 = condition_input.cuda(self.device,
-                                                                                non_blocking=True), query_input.cuda(
+                                                                                    non_blocking=True), query_input.cuda(
                             self.device,
                             non_blocking=True), y2.cuda(
                             self.device, non_blocking=True), y1.cuda(
@@ -165,13 +165,14 @@ class Solver(object):
                     # space_w, channel_w = weights
                     # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = space_w
                     # e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c = channel_w
-                    e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
-                    weights = [e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, None, None]
+                    # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
+                    # weights = [e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w]
                     # channel_w = [e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c]
                     # weights = (space_w, channel_w)
                     output = model.segmentor(query_input, weights)
                     # TODO: add weights
-                    loss = self.loss_func(F.softmax(output, dim=1), y2, y1)
+                    cost_weight = (1, 0) if epoch < 3 else (0, 1)
+                    loss = self.loss_func(F.softmax(output, dim=1), y2, weight=cost_weight)
                     optim_s.zero_grad()
                     optim_c.zero_grad()
                     loss.backward()

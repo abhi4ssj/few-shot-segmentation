@@ -47,7 +47,7 @@ def train(train_params, common_params, data_params, net_params):
     train_data, test_data = load_data(data_params)
 
     folds = ['fold1']
-    model_prefix = 'model6_Focal_loss_noClsLastDec_'
+    model_prefix = 'model6_Focal_gamma2_after3epoch_'
     for fold in folds:
         final_model_path = os.path.join(common_params['save_model_dir'], model_prefix + fold + '.pth.tar')
 
@@ -121,7 +121,7 @@ def evaluate(eval_params, net_params, data_params, common_params, train_params):
     model_name = 'model6_Dice_L2_loss_target_fold1.pth.tar'
     folds = ['fold1']
 
-    eval_model_path1 = "saved_models/model6_Dice_L2_loss_target_fold1.pth.tar"
+    eval_model_path1 = "saved_models/model6_Focal_gamma2_after3epoch_fold1.pth.tar"
     eval_model_path2 = "saved_models/model6_coronal_fold1.pth.tar"
     eval_model_path3 = "saved_models/model6_sagittal_fold1.pth.tar"
 
