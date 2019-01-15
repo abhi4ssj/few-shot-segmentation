@@ -142,6 +142,20 @@ class SDnetConditioner(nn.Module):
 
         return space_weights, channel_weights
 
+    def enable_test_dropout(self):
+        attr_dict = self.__dict__['_modules']
+        for i in range(1, 5):
+            encode_block, decode_block = attr_dict['encode' + str(i)], attr_dict['decode' + str(i)]
+            encode_block.drop_out = encode_block.drop_out.apply(nn.Module.train)
+            decode_block.drop_out = decode_block.drop_out.apply(nn.Module.train)
+
+    def disable_test_dropout(self):
+        attr_dict = self.__dict__['_modules']
+        for i in range(1, 5):
+            encode_block, decode_block = attr_dict['encode' + str(i)], attr_dict['decode' + str(i)]
+            encode_block.drop_out = encode_block.drop_out.apply(nn.Module.eval)
+            decode_block.drop_out = decode_block.drop_out.apply(nn.Module.eval)
+
 
 class SDnetSegmentor(nn.Module):
     """
@@ -275,6 +289,20 @@ class SDnetSegmentor(nn.Module):
 
         return logit
 
+    def enable_test_dropout(self):
+        attr_dict = self.__dict__['_modules']
+        for i in range(1, 5):
+            encode_block, decode_block = attr_dict['encode' + str(i)], attr_dict['decode' + str(i)]
+            encode_block.drop_out = encode_block.drop_out.apply(nn.Module.train)
+            decode_block.drop_out = decode_block.drop_out.apply(nn.Module.train)
+
+    def disable_test_dropout(self):
+        attr_dict = self.__dict__['_modules']
+        for i in range(1, 5):
+            encode_block, decode_block = attr_dict['encode' + str(i)], attr_dict['decode' + str(i)]
+            encode_block.drop_out = encode_block.drop_out.apply(nn.Module.eval)
+            decode_block.drop_out = decode_block.drop_out.apply(nn.Module.eval)
+
 
 class FewShotSegmentorDoubleSDnet(nn.Module):
     '''
@@ -284,6 +312,7 @@ class FewShotSegmentorDoubleSDnet(nn.Module):
     def __init__(self, params):
         super(FewShotSegmentorDoubleSDnet, self).__init__()
         self.conditioner = SDnetConditioner(params)
+        params['drop_out'] = 0
         self.segmentor = SDnetSegmentor(params)
 
     def forward(self, input1, input2):
@@ -292,11 +321,12 @@ class FewShotSegmentorDoubleSDnet(nn.Module):
         return segment
 
     def enable_test_dropout(self):
-        attr_dict = self.__dict__['_modules']
-        for i in range(1, 5):
-            encode_block, decode_block = attr_dict['encode' + str(i)], attr_dict['decode' + str(i)]
-            encode_block.drop_out = encode_block.drop_out.apply(nn.Module.train)
-            decode_block.drop_out = decode_block.drop_out.apply(nn.Module.train)
+        self.conditioner.enable_test_dropout()
+        self.segmentor.enable_test_dropout()
+
+    def disable_test_dropout(self):
+        self.conditioner.disable_test_dropout()
+        self.segmentor.disable_test_dropout()
 
     @property
     def is_cuda(self):
@@ -346,4 +376,3 @@ def to_cuda(X, device):
     elif type(X) is torch.Tensor and not X.is_cuda:
         X = X.type(torch.FloatTensor).cuda(device, non_blocking=True)
     return X
-
