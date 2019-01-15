@@ -16,4 +16,4 @@
 10000129_1_CTce_ThAb.mat
 10000136_1_CTce_ThAb.mat
 10000110_1_CTce_ThAb.mat
-10000130_1_CTce_ThAb.mat
+10000105_1_CTce_ThAb.mat

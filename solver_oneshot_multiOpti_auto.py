@@ -25,7 +25,7 @@ class Solver(object):
                  num_class,
                  optim=torch.optim.SGD,
                  optim_args={},
-                 loss_func=losses.CombinedLoss(),
+                 loss_func=losses.DiceLoss(),
                  model_name='OneShotSegmentor',
                  labels=None,
                  num_epochs=10,
@@ -50,11 +50,11 @@ class Solver(object):
         # self.optim = optim(model.parameters(), **optim_args)
 
         self.optim_c = optim(
-            [{'params': model.conditioner.parameters(), 'lr': 1e-15, 'momentum': 0.95, 'weight_decay': 0.001}
+            [{'params': model.conditioner.parameters(), 'lr': 1e-2, 'momentum': 0.99, 'weight_decay': 0.0001}
              ], **optim_args)
 
         self.optim_s = optim(
-            [{'params': model.segmentor.parameters(), 'lr': 1e-15, 'momentum': 0.95, 'weight_decay': 0.001}
+            [{'params': model.segmentor.parameters(), 'lr': 1e-2, 'momentum': 0.99, 'weight_decay': 0.0001}
              ], **optim_args)
 
         # self.scheduler = lr_scheduler.StepLR(self.optim, step_size=5,
@@ -62,7 +62,7 @@ class Solver(object):
         self.scheduler_s = lr_scheduler.StepLR(self.optim_s, step_size=4,
                                                gamma=0.5)
         self.scheduler_c = lr_scheduler.StepLR(self.optim_c, step_size=4,
-                                               gamma=0.5)
+                                               gamma=0.1)
 
         exp_dir_path = os.path.join(exp_dir, exp_name)
         common_utils.create_if_not(exp_dir_path)
@@ -104,7 +104,7 @@ class Solver(object):
         self.logWriter.log('START TRAINING. : model name = %s, device = %s' % (
             self.model_name, torch.cuda.get_device_name(self.device)))
         current_iteration = self.start_iteration
-        warm_up_epoch = 3
+        warm_up_epoch = 10
         val_old = 0
         change_model = False
         current_model = 'seg'
@@ -145,7 +145,8 @@ class Solver(object):
                     # sim_list = self.get_similarity_idx(y1, y2)
                     # condition_input = torch.cat((input1, y1.unsqueeze(1)), dim=1)
                     # TODO: Reverse Contrast
-                    condition_input = torch.mul(input1, y1.unsqueeze(1))
+                    condition_input = torch.cat((input1, y1.unsqueeze(1)), dim=1)
+                    # condition_input = torch.mul(input1, y1.unsqueeze(1))
                     # condition_input_2 = torch.mul((1-input1), y1.unsqueeze(1))
                     # condition_input = torch.cat((condition_input_1, condition_input_2), dim=1)
                     query_input = input2
@@ -153,7 +154,7 @@ class Solver(object):
 
                     if model.is_cuda:
                         condition_input, query_input, y2, y1 = condition_input.cuda(self.device,
-                                                                                non_blocking=True), query_input.cuda(
+                                                                                    non_blocking=True), query_input.cuda(
                             self.device,
                             non_blocking=True), y2.cuda(
                             self.device, non_blocking=True), y1.cuda(
@@ -165,13 +166,14 @@ class Solver(object):
                     # space_w, channel_w = weights
                     # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = space_w
                     # e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c = channel_w
-                    e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
-                    weights = [e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, None, None]
+                    # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
+                    # weights = [None, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, None]
                     # channel_w = [e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c]
                     # weights = (space_w, channel_w)
                     output = model.segmentor(query_input, weights)
                     # TODO: add weights
-                    loss = self.loss_func(F.softmax(output, dim=1), y2, y1)
+                    # loss_weights = (1, 0) if epoch < 5 else (0.5, 0.5)
+                    loss = self.loss_func(F.softmax(output, dim=1), y2)
                     optim_s.zero_grad()
                     optim_c.zero_grad()
                     loss.backward()
@@ -218,6 +220,7 @@ class Solver(object):
                         'optimizer_c': optim_c.state_dict(),
                         'scheduler_c': scheduler_c.state_dict(),
                         'optimizer_s': optim_s.state_dict(),
+                        'best_ds_mean_epoch': self.best_ds_mean_epoch,
                         'scheduler_s': scheduler_s.state_dict()
                     }, os.path.join(self.exp_dir_path, CHECKPOINT_DIR,
                                     'checkpoint_epoch_' + str(epoch) + '.' + CHECKPOINT_EXTENSION))
@@ -245,7 +248,11 @@ class Solver(object):
                     index = np.random.choice(len(out_arr), 3, replace=False)
                     self.logWriter.image_per_epoch(out_arr[index], y_arr[index], phase, epoch, additional_image=(
                         input_img_arr[index], condition_input_img_arr[index], condition_y_arr[index]))
-                    self.logWriter.dice_score_per_epoch(phase, out_arr, y_arr, epoch)
+                    ds_mean = self.logWriter.dice_score_per_epoch(phase, out_arr, y_arr, epoch)
+                    if phase == 'val':
+                        if ds_mean > self.best_ds_mean:
+                            self.best_ds_mean = ds_mean
+                            self.best_ds_mean_epoch = epoch
 
                     self.logWriter.log("==== Epoch [" + str(epoch) + " / " + str(self.num_epochs) + "] DONE ====")
                 self.logWriter.log('FINISH.')
@@ -254,32 +261,80 @@ class Solver(object):
     def save_checkpoint(self, state, filename):
         torch.save(state, filename)
 
-    def load_checkpoint(self):
-        checkpoint_path = os.path.join(self.exp_dir_path, CHECKPOINT_DIR, '*.' + CHECKPOINT_EXTENSION)
-        list_of_files = glob.glob(checkpoint_path)
-        if len(list_of_files) > 0:
-            latest_file = max(list_of_files, key=os.path.getctime)
-            self.logWriter.log("=> loading checkpoint '{}'".format(latest_file))
-            checkpoint = torch.load(latest_file)
-            self.start_epoch = checkpoint['epoch']
-            self.start_iteration = checkpoint['start_iteration']
-            self.model.load_state_dict(checkpoint['state_dict'])
-            self.optim_c.load_state_dict(checkpoint['optimizer_c'])
-            self.optim_s.load_state_dict(checkpoint['optimizer_s'])
+    def save_best_model(self, path):
+        """
+        Save model with its parameters to the given path. Conventionally the
+        path should end with "*.model".
 
-            for state in self.optim_c.state.values():
-                for k, v in state.items():
-                    if torch.is_tensor(v):
-                        state[k] = v.to(self.device)
+        Inputs:
+        - path: path string
+        """
+        print('Saving model... %s' % path)
+        print("Best Epoch... " + str(self.best_ds_mean_epoch))
+        self.load_checkpoint(self.best_ds_mean_epoch)
 
-            for state in self.optim_s.state.values():
-                for k, v in state.items():
-                    if torch.is_tensor(v):
-                        state[k] = v.to(self.device)
+        torch.save(self.model, path)
 
-            self.scheduler_c.load_state_dict(checkpoint['scheduler_c'])
-            self.scheduler_s.load_state_dict(checkpoint['scheduler_s'])
-            self.logWriter.log("=> loaded checkpoint '{}' (epoch {})".format(latest_file, checkpoint['epoch']))
+    def load_checkpoint(self, epoch=None):
+        if epoch is not None:
+            checkpoint_path = os.path.join(self.exp_dir_path, CHECKPOINT_DIR,
+                                           'checkpoint_epoch_' + str(epoch) + '.' + CHECKPOINT_EXTENSION)
+            self._load_checkpoint_file(checkpoint_path)
         else:
-            self.logWriter.log(
-                "=> no checkpoint found at '{}' folder".format(os.path.join(self.exp_dir_path, CHECKPOINT_DIR)))
+            all_files_path = os.path.join(self.exp_dir_path, CHECKPOINT_DIR, '*.' + CHECKPOINT_EXTENSION)
+            list_of_files = glob.glob(all_files_path)
+            if len(list_of_files) > 0:
+                checkpoint_path = max(list_of_files, key=os.path.getctime)
+                self._load_checkpoint_file(checkpoint_path)
+            else:
+                self.logWriter.log(
+                    "=> no checkpoint found at '{}' folder".format(os.path.join(self.exp_dir_path, CHECKPOINT_DIR)))
+
+    # def _load_checkpoint_file(self, file_path):
+    #     self.logWriter.log("=> loading checkpoint '{}'".format(file_path))
+    #     checkpoint = torch.load(file_path)
+    #     self.start_epoch = checkpoint['epoch']
+    #     self.start_iteration = checkpoint['start_iteration']
+    #     self.model.load_state_dict(checkpoint['state_dict'])
+    #     self.optim.load_state_dict(checkpoint['optimizer'])
+    #
+    #     for state in self.optim.state.values():
+    #         for k, v in state.items():
+    #             if torch.is_tensor(v):
+    #                 state[k] = v.to(self.device)
+    #
+    #     self.scheduler.load_state_dict(checkpoint['scheduler'])
+    #     self.logWriter.log("=> loaded checkpoint '{}' (epoch {})".format(file_path, checkpoint['epoch']))
+
+    def _load_checkpoint_file(self, file_path):
+        self.logWriter.log("=> loading checkpoint '{}'".format(file_path))
+        # checkpoint = torch.load(file_path)
+        # checkpoint_path = os.path.join(self.exp_dir_path, CHECKPOINT_DIR, '*.' + CHECKPOINT_EXTENSION)
+        # list_of_files = glob.glob(checkpoint_path)
+        # if len(list_of_files) > 0:
+        #     latest_file = max(list_of_files, key=os.path.getctime)
+        #     self.logWriter.log("=> loading checkpoint '{}'".format(latest_file))
+        checkpoint = torch.load(file_path)
+        self.start_epoch = checkpoint['epoch']
+        self.start_iteration = checkpoint['start_iteration']
+        self.best_ds_mean_epoch = checkpoint['best_ds_mean_epoch']
+        self.model.load_state_dict(checkpoint['state_dict'])
+        self.optim_c.load_state_dict(checkpoint['optimizer_c'])
+        self.optim_s.load_state_dict(checkpoint['optimizer_s'])
+
+        for state in self.optim_c.state.values():
+            for k, v in state.items():
+                if torch.is_tensor(v):
+                    state[k] = v.to(self.device)
+
+        for state in self.optim_s.state.values():
+            for k, v in state.items():
+                if torch.is_tensor(v):
+                    state[k] = v.to(self.device)
+
+        self.scheduler_c.load_state_dict(checkpoint['scheduler_c'])
+        self.scheduler_s.load_state_dict(checkpoint['scheduler_s'])
+        self.logWriter.log("=> loaded checkpoint '{}' (epoch {})".format(file_path, checkpoint['epoch']))
+        # else:
+        #     self.logWriter.log(
+        #         "=> no checkpoint found at '{}' folder".format(os.path.join(self.exp_dir_path, CHECKPOINT_DIR)))
