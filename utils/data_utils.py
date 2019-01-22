@@ -6,6 +6,7 @@ import torch
 import torch.utils.data as data
 import scipy.io as sio
 import preprocessor as preprocessor
+import nibabel as nb
 import math
 from torchvision import transforms
 
@@ -31,8 +32,6 @@ class ImdbData(data.Dataset):
         self.y = y
         self.w = w
         self.transforms = transforms
-
-
 
     def __getitem__(self, index):
         img = torch.from_numpy(self.X[index])
@@ -103,6 +102,15 @@ def load_and_preprocess(file_path, orientation, remap_config, reduce_slices=Fals
     return volume, labelmap, class_weights, weights
 
 
+def load_data(file_path, orientation):
+    print(file_path[0], file_path[1])
+    volume_nifty, labelmap_nifty = nb.load(file_path[0]), nb.load(file_path[1])
+    volume, labelmap = volume_nifty.get_fdata(), labelmap_nifty.get_fdata()
+    volume = (volume - np.min(volume)) / (np.max(volume) - np.min(volume))
+    volume, labelmap = preprocessor.rotate_orientation(volume, labelmap, orientation)
+    return volume, labelmap, volume_nifty.header
+
+
 def load_data_mat(file_path, orientation):
     data = sio.loadmat(file_path)
     volume = data['DatVol']
@@ -126,6 +134,30 @@ def preprocess(volume, labelmap, remap_config, reduce_slices=False, remove_black
         return volume, labelmap, class_weights, weights
     else:
         return volume, labelmap, None, None
+
+
+def load_file_paths_brain(data_dir, label_dir, volumes_txt_file=None):
+    """
+    This function returns the file paths combined as a list where each element is a 2 element tuple, 0th being data and 1st being label.
+    It should be modified to suit the need of the project
+    :param data_dir: Directory which contains the data files
+    :param label_dir: Directory which contains the label files
+    :param volumes_txt_file: (Optional) Path to the a csv file, when provided only these data points will be read
+    :return: list of file paths as string
+    """
+
+    volume_exclude_list = ['IXI290', 'IXI423']
+    if volumes_txt_file:
+        with open(volumes_txt_file) as file_handle:
+            volumes_to_use = file_handle.read().splitlines()
+    else:
+        volumes_to_use = [name for name in os.listdir(data_dir) if name not in volume_exclude_list]
+
+    file_paths = [
+        [os.path.join(data_dir, vol, 'mri/orig.mgz'), os.path.join(label_dir, vol+'_glm.mgz')]
+        for
+        vol in volumes_to_use]
+    return file_paths
 
 
 def load_file_paths(data_dir, label_dir, volumes_txt_file=None):

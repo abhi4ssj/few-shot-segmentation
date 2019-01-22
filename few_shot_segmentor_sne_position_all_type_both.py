@@ -108,6 +108,7 @@ class SDnetConditioner(nn.Module):
 
         e3, _, ind3 = self.encode3(e2)
         e_w3 = self.sigmoid(self.squeeze_conv_e3(e3))
+
         e4, _, ind4 = self.encode4(e3)
         e_w4 = self.sigmoid(self.squeeze_conv_e4(e4))
 

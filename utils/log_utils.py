@@ -109,6 +109,7 @@ class LogWriter(object):
         # self.plot_dice_score(phase, 'dice_score_per_epoch', ds, 'Dice Score', epoch)
 
         self.log("DONE")
+        return ds
 
     def dice_score_per_epoch_segmentor(self, phase, output, correct_labels, epoch):
         self.log("Dice Score...")

@@ -7,6 +7,7 @@ import torch
 import utils.common_utils as common_utils
 import utils.data_utils as du
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 import shot_batch_sampler as SB
 
 
@@ -74,6 +75,73 @@ def binarize_label(volume, groud_truth, class_label):
     return condition_input, range_index.cpu().numpy()
 
 
+def CV(samples_arr):
+    eps = 0.0001
+    threshold = 0.0001
+    sample_size = samples_arr[0].size()
+    total_pixels = sample_size[-1] * sample_size[-2]
+
+    samples_arr = [sample.squeeze() for sample in samples_arr if
+                   (sample.sum().item() / total_pixels) > threshold]
+
+    if len(samples_arr) > 0:
+        samples_arr = torch.cat(samples_arr).float().squeeze()
+        std = torch.std(samples_arr).item()
+        mean = torch.mean(samples_arr).item() + eps
+        return std / mean
+    else:
+        return 1000000
+
+
+def IOU_Single(sample1, sample2):
+    eps = 0.0001
+    sample1, sample2 = sample1.squeeze().byte(), sample2.squeeze().byte()
+    intersection = sample1 & sample2
+    union = sample1 | sample2
+
+    numerator = intersection.sum().item()
+    denominator = union.sum().item() + eps
+    return numerator / denominator
+
+
+def IoU(samples_arr, support, query, vol):
+    # Hardcoded for 3 elements as of now
+    eps = 0.0001
+    threshold = 0.0001
+    sample_size = samples_arr[0].size()
+    total_pixels = sample_size[-1] * sample_size[-2]
+
+    samples_arr = [sample.squeeze().byte() for sample in samples_arr if
+                   (sample.sum().item() / total_pixels) > threshold]
+
+    # plt.imsave(str(vol) + '_' + str(query) + '_' + str(support) + '_' + 'fig1', sample1.cpu().numpy())
+    # plt.imsave(str(vol) + '_' + str(query) + '_' + str(support) + '_' + 'fig2', sample2.cpu().numpy())
+    # plt.imsave(str(vol) + '_' + str(query) + '_' + str(support) + '_' + 'fig3', sample3.cpu().numpy())
+    if len(samples_arr) > 0:
+        intersection = torch.ones(samples_arr[0].size()).byte().cuda()
+        union = torch.zeros(samples_arr[0].size()).byte().cuda()
+
+        for sample in samples_arr:
+            intersection = intersection & sample
+            union = union | sample
+
+        numerator = intersection.sum().item()
+        denominator = union.sum().item() + eps
+
+        return numerator / denominator
+    else:
+        return 0
+
+    # inter = torch.ones(samples_arr[0].size()).cuda()
+    # union = torch.zeros(samples_arr[0].size()).cuda()
+    #
+    #
+    # for sample in samples_arr:
+    #     inter = torch.sum(torch.mul(inter, sample.type(torch.cuda.FloatTensor)))
+    #     union = torch.sum(union) + torch.sum(sample.type(torch.cuda.FloatTensor)) - inter
+    # return -torch.div(inter, union + 0.0001).item()
+
+
 def evaluate_dice_score(model_path,
                         num_classes,
                         query_labels,
@@ -86,7 +154,8 @@ def evaluate_dice_score(model_path,
     print("**Starting evaluation. Please check tensorboard for plots if a logWriter is provided in arguments**")
     print("Loading model => " + model_path)
     batch_size = 20
-    Num_support = 10
+    Num_support = 15
+    MC_samples = 10
     with open(query_txt_file) as file_handle:
         volumes_query = file_handle.read().splitlines()
 
@@ -100,7 +169,6 @@ def evaluate_dice_score(model_path,
         model.cuda(device)
 
     model.eval()
-
     common_utils.create_if_not(prediction_path)
 
     print("Evaluating now... " + fold)
@@ -109,26 +177,33 @@ def evaluate_dice_score(model_path,
 
     with torch.no_grad():
         all_query_dice_score_list = []
+
         for query_label in query_labels:
             volume_dice_score_list = []
 
-            # Loading support
-            support_volume, support_labelmap, _, _ = du.load_and_preprocess(support_file_paths[0],
-                                                                            orientation=orientation,
-                                                                            remap_config=remap_config)
-            support_volume = support_volume if len(support_volume.shape) == 4 else support_volume[:, np.newaxis, :,
-                                                                                   :]
-            support_volume, support_labelmap = torch.tensor(support_volume).type(torch.FloatTensor), \
-                                               torch.tensor(support_labelmap).type(torch.LongTensor)
+            support_slices = []
 
-            support_volume, range_index = binarize_label(support_volume, support_labelmap, query_label)
+            for i, file_path in enumerate(support_file_paths):
+                # Loading support
+                support_volume, support_labelmap, _, _ = du.load_and_preprocess(file_path,
+                                                                                orientation=orientation,
+                                                                                remap_config=remap_config)
 
-            # slice_gap_support = int(np.ceil(len(support_volume) / Num_support))
-            #
-            # support_slice_indexes = [i for i in range(0, len(support_volume), slice_gap_support)]
-            #
-            # if len(support_slice_indexes) < Num_support:
-            #    support_slice_indexes.append(len(support_volume) - 1)
+                support_volume = support_volume if len(support_volume.shape) == 4 else support_volume[:, np.newaxis, :,
+                                                                                       :]
+                support_volume, support_labelmap = torch.tensor(support_volume).type(torch.FloatTensor), \
+                                                   torch.tensor(support_labelmap).type(torch.LongTensor)
+
+                support_volume, range_index = binarize_label(support_volume, support_labelmap, query_label)
+
+                slice_gap_support = int(np.ceil(len(support_volume) / Num_support))
+
+                support_slice_indexes = [i for i in range(0, len(support_volume), slice_gap_support)]
+
+                if len(support_slice_indexes) < Num_support:
+                    support_slice_indexes.append(len(support_volume) - 1)
+
+                support_slices.extend([support_volume[idx] for idx in support_slice_indexes])
 
             for vol_idx, file_path in enumerate(query_file_paths):
 
@@ -145,42 +220,31 @@ def evaluate_dice_score(model_path,
                 query_volume = query_volume[range_query[0]: range_query[1] + 1]
                 query_labelmap = query_labelmap[range_query[0]: range_query[1] + 1]
 
-                dice_per_slice = []
-                vol_output = []
+                slice_gap_query = int(np.ceil(len(query_volume) / Num_support))
+                dice_per_batch = []
+                batch_output_arr = []
+                for support_slice_idx, i in enumerate(range(0, len(query_volume), slice_gap_query)):
+                    query_batch_x = query_volume[i:i+slice_gap_query]
+                    support_batch_x = support_volume[support_slice_idx].repeat(query_batch_x.size()[0], 1, 1, 1)
 
-                for i, query_slice in enumerate(query_volume):
-                    query_batch_x = query_slice.unsqueeze(0)
-                    max_dice = -1.0
-                    max_output = None
-                    for j in range(0, len(support_volume), 10):
-                        support_slice = support_volume[j]
-
-                        support_batch_x = support_slice.unsqueeze(0)
-                        if cuda_available:
-                            query_batch_x = query_batch_x.cuda(device)
-                            support_batch_x = support_batch_x.cuda(device)
+                    if cuda_available:
+                        query_batch_x = query_batch_x.cuda(device)
+                        support_batch_x = support_batch_x.cuda(device)
 
                         weights = model.conditioner(support_batch_x)
                         out = model.segmentor(query_batch_x, weights)
 
                         _, batch_output = torch.max(F.softmax(out, dim=1), dim=1)
-                        slice_dice_score = dice_score_binary(batch_output,
-                                                             query_labelmap[i].cuda(device), phase=mode)
-                        dice_per_slice.append(slice_dice_score.item())
-                        if slice_dice_score.item() >= max_dice:
-                            max_dice = slice_dice_score.item()
-                            max_output = batch_output
-                    # dice_per_slice.append(max_dice)
-                    vol_output.append(max_output)
+                        batch_output_arr.append(batch_output)
 
-                vol_output = torch.cat(vol_output)
-                volume_dice_score = dice_score_binary(vol_output, query_labelmap.cuda(device), phase=mode)
-                volume_dice_score_list.append(volume_dice_score)
-
-                print(volume_dice_score)
+                volume_output = torch.cat(batch_output_arr)
+                volume_dice_score = dice_score_binary(volume_output, query_labelmap.cuda(device), phase=mode)
+                volume_dice_score_list.append(volume_dice_score.item())
+                print(str(file_path), volume_dice_score)
 
             dice_score_arr = np.asarray(volume_dice_score_list)
             avg_dice_score = np.median(dice_score_arr)
+            print(volume_dice_score_list)
             print('Query Label -> ' + str(query_label) + ' ' + str(avg_dice_score))
             all_query_dice_score_list.append(avg_dice_score)
 

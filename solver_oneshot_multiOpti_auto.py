@@ -59,10 +59,10 @@ class Solver(object):
 
         # self.scheduler = lr_scheduler.StepLR(self.optim, step_size=5,
         #                                        gamma=0.1)
-        self.scheduler_s = lr_scheduler.StepLR(self.optim_s, step_size=4,
-                                               gamma=0.5)
-        self.scheduler_c = lr_scheduler.StepLR(self.optim_c, step_size=4,
+        self.scheduler_s = lr_scheduler.StepLR(self.optim_s, step_size=10,
                                                gamma=0.1)
+        self.scheduler_c = lr_scheduler.StepLR(self.optim_c, step_size=10,
+                                               gamma=0.001)
 
         exp_dir_path = os.path.join(exp_dir, exp_name)
         common_utils.create_if_not(exp_dir_path)
@@ -104,7 +104,7 @@ class Solver(object):
         self.logWriter.log('START TRAINING. : model name = %s, device = %s' % (
             self.model_name, torch.cuda.get_device_name(self.device)))
         current_iteration = self.start_iteration
-        warm_up_epoch = 10
+        warm_up_epoch = 15
         val_old = 0
         change_model = False
         current_model = 'seg'

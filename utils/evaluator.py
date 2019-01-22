@@ -38,6 +38,15 @@ def dice_confusion_matrix(vol_output, ground_truth, num_classes, no_samples=10, 
     return avg_dice, dice_cm
 
 
+def get_range(volume):
+    batch, _, _ = volume.size()
+    slice_with_class = torch.sum(volume.view(batch, -1), dim=1) > 10
+    index = slice_with_class[:-1] - slice_with_class[1:] > 0
+    seq = torch.Tensor(range(batch - 1))
+    range_index = seq[index].type(torch.LongTensor)
+    return range_index
+
+
 def dice_score_perclass(vol_output, ground_truth, num_classes, no_samples=10, mode='train'):
     dice_perclass = torch.zeros(num_classes)
     if mode == 'train':
@@ -54,8 +63,15 @@ def dice_score_perclass(vol_output, ground_truth, num_classes, no_samples=10, mo
 
 def binarize_label(volume, groud_truth, class_label):
     groud_truth = (groud_truth == class_label).type(torch.FloatTensor)
-    condition_input = torch.mul(volume, groud_truth.unsqueeze(1))
-    return condition_input
+    batch, _, _ = groud_truth.size()
+    slice_with_class = torch.sum(groud_truth.view(batch, -1), dim=1) > 10
+    index = slice_with_class[:-1] - slice_with_class[1:] > 0
+    seq = torch.Tensor(range(batch - 1))
+    range_index = seq[index].type(torch.LongTensor)
+    groud_truth = groud_truth[slice_with_class]
+    volume = volume[slice_with_class]
+    condition_input = torch.cat((volume, groud_truth.unsqueeze(1)), dim=1)
+    return condition_input, range_index.cpu().numpy()
 
 
 def evaluate_dice_score(model_path,
@@ -69,9 +85,8 @@ def evaluate_dice_score(model_path,
                         prediction_path, device=0, logWriter=None, mode='eval', fold=None):
     print("**Starting evaluation. Please check tensorboard for plots if a logWriter is provided in arguments**")
     print("Loading model => " + model_path)
-    batch_size = 10
-    # Num_support = 6
-
+    batch_size = 20
+    Num_support = 15
     with open(query_txt_file) as file_handle:
         volumes_query = file_handle.read().splitlines()
 
@@ -96,87 +111,212 @@ def evaluate_dice_score(model_path,
         all_query_dice_score_list = []
         for query_label in query_labels:
             volume_dice_score_list = []
-            for vol_idx, file_path in enumerate(support_file_paths):
-                # Loading support
-                support_volume, support_labelmap, _, _ = du.load_and_preprocess(file_path,
-                                                                                orientation=orientation,
-                                                                                remap_config=remap_config)
-                support_volume = support_volume if len(support_volume.shape) == 4 else support_volume[:, np.newaxis, :,
-                                                                                       :]
-                support_volume, support_labelmap = torch.tensor(support_volume).type(torch.FloatTensor), torch.tensor(
-                    support_labelmap).type(torch.LongTensor)
-                support_volume = binarize_label(support_volume, support_labelmap, query_label)
-                # sz = support_volume.size()
-                # slice_gap = sz[0] // Num_support
+            #
+            # support_volume, support_labelmap, _, _ = du.load_and_preprocess(support_file_paths[0],
+            #                                                                 orientation=orientation,
+            #                                                                 remap_config=remap_config)
+            #
+            # support_volume = support_volume if len(support_volume.shape) == 4 else support_volume[:, np.newaxis, :, :]
+            #
+            # support_volume, support_labelmap = torch.tensor(support_volume).type(torch.FloatTensor), torch.tensor(
+            #     support_labelmap).type(torch.LongTensor)
+            # support_volume, range_index = binarize_label(support_volume, support_labelmap, query_label)
+            # support_volume = support_volume[range_index[0]: range_index[1]]
+
+            # Loading support
+            support_volume, support_labelmap, _, _ = du.load_and_preprocess(support_file_paths[0],
+                                                                            orientation=orientation,
+                                                                            remap_config=remap_config)
+            support_volume = support_volume if len(support_volume.shape) == 4 else support_volume[:, np.newaxis, :,
+                                                                                   :]
+            support_volume, support_labelmap = torch.tensor(support_volume).type(torch.FloatTensor), \
+                                               torch.tensor(support_labelmap).type(torch.LongTensor)
+
+            support_volume, range_index = binarize_label(support_volume, support_labelmap, query_label)
+
+            slice_gap_support = int(np.ceil(len(support_volume) / Num_support))
+
+            support_slice_indexes = [i for i in range(0, len(support_volume), slice_gap_support)]
+
+            if len(support_slice_indexes) < Num_support:
+                support_slice_indexes.append(len(support_volume) - 1)
 
             for vol_idx, file_path in enumerate(query_file_paths):
+
                 query_volume, query_labelmap, _, _ = du.load_and_preprocess(file_path,
                                                                             orientation=orientation,
                                                                             remap_config=remap_config)
 
                 query_volume = query_volume if len(query_volume.shape) == 4 else query_volume[:, np.newaxis, :, :]
-                query_volume, query_labelmap = torch.tensor(query_volume).type(torch.FloatTensor), torch.tensor(
-                    query_labelmap).type(torch.LongTensor)
+                query_volume, query_labelmap = torch.tensor(query_volume).type(torch.FloatTensor), \
+                                               torch.tensor(query_labelmap).type(torch.LongTensor)
 
                 query_labelmap = query_labelmap == query_label
-                support_batch_x = []
-                k = 2
+                range_query = get_range(query_labelmap)
+                query_volume = query_volume[range_query[0]: range_query[1] + 1]
+                query_labelmap = query_labelmap[range_query[0]: range_query[1] + 1]
+
+                slice_gap_query = int(np.ceil((len(query_volume) / Num_support)))
+
+                query_slice_indexes = [i for i in range(0, len(query_volume), slice_gap_query)]
+                if len(query_slice_indexes) < Num_support:
+                    query_slice_indexes.append(len(query_volume) - 1)
+
                 volume_prediction = []
-                for i in range(0, len(query_volume), batch_size):
-                    query_batch_x = query_volume[i: i + batch_size]
-                    if k % 2 == 0:
-                        support_batch_x = support_volume[i: i + batch_size]
-                    sz = query_batch_x.size()
-                    support_batch_x = support_batch_x[batch_size - 1].repeat(sz[0], 1, 1, 1)
-                    k += 1
+
+                # for i in range(0, len(query_volume), batch_size):
+                support_current_slice = 0
+                query_current_slice = 0
+
+                for i, query_start_slice in enumerate(query_slice_indexes):
+                    if query_start_slice == query_slice_indexes[-1]:
+                        query_batch_x = query_volume[query_slice_indexes[i]:]
+                    else:
+                        query_batch_x = query_volume[query_slice_indexes[i]:query_slice_indexes[i + 1]]
+
+                    support_batch_x = support_volume[support_slice_indexes[i]]
+
+                    support_batch_x = support_batch_x.repeat(len(query_batch_x), 1, 1, 1)
                     if cuda_available:
                         query_batch_x = query_batch_x.cuda(device)
                         support_batch_x = support_batch_x.cuda(device)
 
                     weights = model.conditioner(support_batch_x)
-                    # space_w, channel_w = weights
-                    # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = space_w
-                    # e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c = channel_w
-                    # # e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
-                    # space_w = [e_w1, e_w2, None, None, None, d_w2, d_w1, cls_w]
-                    # channel_w = [e_c1, e_c2, e_c3, bn_c, d_c3, d_c2, d_c1, cls_c]
-                    # weights = (space_w, channel_w)
-                    e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, d_w1, cls_w = weights
-                    weights = [e_w1, e_w2, e_w3, bn_w, d_w3, d_w2, None, None]
                     out = model.segmentor(query_batch_x, weights)
 
                     _, batch_output = torch.max(F.softmax(out, dim=1), dim=1)
                     volume_prediction.append(batch_output)
+                    query_current_slice += slice_gap_query
+                    support_current_slice += slice_gap_support
+
+                # query_volume, query_labelmap, _, _ = du.load_and_preprocess(file_path, orientation=orientation,
+                #                                                             remap_config=remap_config)
+                # query_labelmap = query_labelmap == query_label
+                # range_query = get_range(query_labelmap)
+                # query_volume = query_volume[range_query[0]: range_query[1]]
+                #
+                # query_volume = query_volume if len(query_volume.shape) == 4 else query_volume[:, np.newaxis, :, :]
+                # query_volume, query_labelmap = torch.tensor(query_volume).type(torch.FloatTensor), torch.tensor(
+                #     query_labelmap).type(torch.LongTensor)
+                #
+                # support_batch_x = []
+                #
+                # volume_prediction = []
+                #
+                # support_current_slice = 0
+                # query_current_slice = 0
+                # support_slice_left = support_volume[range_index[0]]
+
+                # for i in range(0, range_index[0], batch_size):
+                #     end_index_query = query_current_slice + batch_size
+                #     end_index_query = end_index_query if end_index_query < range_index[0] else range_index[0]
+                #
+                #     query_batch_x = query_volume[i: end_index_query]
+                #
+                #     support_batch_x = support_slice_left.repeat(query_batch_x.size()[0], 1, 1, 1)
+                #
+                #     if cuda_available:
+                #         query_batch_x = query_batch_x.cuda(device)
+                #         support_batch_x = support_batch_x.cuda(device)
+                #
+                #     weights = model.conditioner(support_batch_x)
+                #     out = model.segmentor(query_batch_x, weights)
+                #
+                #     _, batch_output = torch.max(F.softmax(out, dim=1), dim=1)
+                #     volume_prediction.append(batch_output)
+                #     query_current_slice = end_index_query
+                #     support_current_slice = query_current_slice
+                #
+                # for i in range(range_index[0], range_index[1] + 1, batch_size):
+                #     end_index_query = query_current_slice + batch_size
+                #     end_index_query = end_index_query if end_index_query < range_index[1] + 1 else range_index[1] + 1
+                #
+                #     query_batch_x = query_volume[i: end_index_query]
+                #
+                #     # end_index_support = support_current_slice + batch_size
+                #     # end_index_support = end_index_support if end_index_support < len(range_index[1] + 1) else len(
+                #     #     range_index[1] + 1)
+                #     # print(len(support_volume))
+                #     # print(support_current_slice, end_index_query)
+                #     support_batch_x = support_volume[support_current_slice: end_index_query]
+                #
+                #     query_current_slice = end_index_query
+                #     support_current_slice = query_current_slice
+                #
+                #     support_batch_x = support_batch_x[0].repeat(query_batch_x.size()[0], 1, 1, 1)
+                #
+                #     # k += 1
+                #     if cuda_available:
+                #         query_batch_x = query_batch_x.cuda(device)
+                #         support_batch_x = support_batch_x.cuda(device)
+                #
+                #     weights = model.conditioner(support_batch_x)
+                #     out = model.segmentor(query_batch_x, weights)
+                #
+                #     _, batch_output = torch.max(F.softmax(out, dim=1), dim=1)
+                #     volume_prediction.append(batch_output)
+                #
+                # support_slice_right = support_volume[range_index[1]]
+                # for i in range(range_index[1] + 1, len(support_volume), batch_size):
+                #     end_index_query = query_current_slice + batch_size
+                #     end_index_query = end_index_query if end_index_query < len(support_volume) else len(support_volume)
+                #
+                #     query_batch_x = query_volume[i: end_index_query]
+                #
+                #     support_batch_x = support_slice_right.repeat(query_batch_x.size()[0], 1, 1, 1)
+                #
+                #     if cuda_available:
+                #         query_batch_x = query_batch_x.cuda(device)
+                #         support_batch_x = support_batch_x.cuda(device)
+                #
+                #     weights = model.conditioner(support_batch_x)
+                #     out = model.segmentor(query_batch_x, weights)
+                #
+                #     _, batch_output = torch.max(F.softmax(out, dim=1), dim=1)
+                #     volume_prediction.append(batch_output)
+                #     query_current_slice = end_index_query
+                #     support_current_slice = query_current_slice
 
                 volume_prediction = torch.cat(volume_prediction)
-                volume_dice_score = dice_score_binary(volume_prediction, query_labelmap.cuda(device), phase=mode)
+
+                # batch, _, _ = query_labelmap.size()
+                # slice_with_class = torch.sum(query_labelmap.view(batch, -1), dim=1) > 10
+                # index = slice_with_class[:-1] - slice_with_class[1:] > 0
+                # seq = torch.Tensor(range(batch - 1))
+                # range_index_gt = seq[index].type(torch.LongTensor)
+
+                volume_dice_score = dice_score_binary(volume_prediction[:len(query_labelmap)], query_labelmap.cuda(device), phase=mode)
 
                 volume_prediction = (volume_prediction.cpu().numpy()).astype('float32')
                 nifti_img = nib.MGHImage(np.squeeze(volume_prediction), np.eye(4))
                 nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_' + fold + str('.mgz')))
+                #
+                # # # Save Input
+                # # nifti_img = nib.MGHImage(np.squeeze(query_volume.cpu().numpy()), np.eye(4))
+                # # nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_Input_' + str('.mgz')))
 
-                # # Save Input
-                # nifti_img = nib.MGHImage(np.squeeze(query_volume.cpu().numpy()), np.eye(4))
-                # nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_Input_' + str('.mgz')))
                 # # # Condition Input
                 # nifti_img = nib.MGHImage(np.squeeze(support_volume.cpu().numpy()), np.eye(4))
                 # nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_CondInput_' + str('.mgz')))
-                # # # Cond GT
-                # nifti_img = nib.MGHImage(np.squeeze(support_labelmap.cpu().numpy()).astype('float32'), np.eye(4))
-                # nib.save(nifti_img,
-                #          os.path.join(prediction_path, volumes_query[vol_idx] + '_CondInputGT_' + str('.mgz')))
-                # # # # Save Ground Truth
-                # nifti_img = nib.MGHImage(np.squeeze(query_labelmap.cpu().numpy()), np.eye(4))
-                # nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_GT_' + str('.mgz')))
+                # # Cond GT
+                nifti_img = nib.MGHImage(np.squeeze(support_labelmap.cpu().numpy()).astype('float32'), np.eye(4))
+                nib.save(nifti_img,
+                         os.path.join(prediction_path, volumes_query[vol_idx] + '_CondInputGT_' + str('.mgz')))
+
+                # # # Save Ground Truth
+                nifti_img = nib.MGHImage(np.squeeze(query_labelmap.cpu().numpy()), np.eye(4))
+                nib.save(nifti_img, os.path.join(prediction_path, volumes_query[vol_idx] + '_GT_' + fold
+                                                 + str('.mgz')))
 
                 # if logWriter:
                 #     logWriter.plot_dice_score('val', 'eval_dice_score', volume_dice_score, volumes_to_use[vol_idx],
                 #                               vol_idx)
-                volume_dice_score = volume_dice_score.cpu().numpy()
+                volume_dice_score = volume_dice_score.item()
                 volume_dice_score_list.append(volume_dice_score)
 
                 print(volume_dice_score)
 
+            print(volume_dice_score_list)
             dice_score_arr = np.asarray(volume_dice_score_list)
             avg_dice_score = np.median(dice_score_arr)
             print('Query Label -> ' + str(query_label) + ' ' + str(avg_dice_score))
@@ -520,7 +660,9 @@ def evaluate_dice_score_3view(model1_path,
                 volume_prediction1 = torch.cat(volume_prediction1)
                 volume_prediction2 = torch.cat(volume_prediction2)
                 volume_prediction3 = torch.cat(volume_prediction3)
-                volume_prediction = 0.33 * F.softmax(volume_prediction1,dim=1) + 0.33 * F.softmax(volume_prediction2.permute(3, 1, 0, 2), dim=1) + 0.33 * F.softmax(volume_prediction3.permute(2, 1, 3, 0), dim=1)
+                volume_prediction = 0.33 * F.softmax(volume_prediction1, dim=1) + 0.33 * F.softmax(
+                    volume_prediction2.permute(3, 1, 0, 2), dim=1) + 0.33 * F.softmax(
+                    volume_prediction3.permute(2, 1, 3, 0), dim=1)
                 _, batch_output = torch.max(volume_prediction, dim=1)
                 volume_dice_score = dice_score_binary(batch_output, query_labelmap1.cuda(device), phase=mode)
 
