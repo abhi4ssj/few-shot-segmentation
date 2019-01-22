@@ -7,7 +7,6 @@ import torch
 import utils.common_utils as common_utils
 import utils.data_utils as du
 import torch.nn.functional as F
-import shot_batch_sampler as SB
 
 
 def dice_score_binary(vol_output, ground_truth, no_samples=10, phase='train'):

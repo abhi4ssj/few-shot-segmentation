@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tensorboardX import SummaryWriter
 import torch
-import evaluator as eu
+import utils.evaluator as eu
 import logging
 
 logging.basicConfig(

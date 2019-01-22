@@ -6,7 +6,7 @@ from torch.optim import lr_scheduler
 import torch.nn as nn
 from utils.log_utils import LogWriter
 import utils.common_utils as common_utils
-from data_utils import split_batch
+from utils.data_utils import split_batch
 import glob
 import torch.nn.functional as F
 

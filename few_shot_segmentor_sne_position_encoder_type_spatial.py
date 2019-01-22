@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from nn_common_modules import modules as sm
-from data_utils import split_batch
+from utils.data_utils import split_batch
 # import torch.nn.functional as F
 from squeeze_and_excitation import squeeze_and_excitation as se
 

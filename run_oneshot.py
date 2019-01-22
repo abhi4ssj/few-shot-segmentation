@@ -5,18 +5,7 @@ import torch
 import torch.nn as nn
 
 import utils.evaluator as eu
-import few_shot_segmentor_model1 as fs1
-import few_shot_segmentor_model2 as fs2
-import few_shot_segmentor_model3 as fs3
-import few_shot_segmentor_model4 as fs4
-import few_shot_segmentor_model5 as fs5
-import few_shot_segmentor_model6 as fs6
-import few_shot_segmentor_model7 as fs7
-import few_shot_segmentor_model8 as fs8
-import few_shot_segmentor_model9 as fs9
-import few_shot_segmentor_model10 as fs10
-import few_shot_segmentor_model11 as fs11
-import few_shot_segmentor_sne_position_all_type_both as fs
+import few_shot_segmentor_sne_position_encoder_type_spatial as fs
 from settings import Settings
 # from solver_oneshot_singleOpti import Solver
 from solver_oneshot_multiOpti_auto import Solver
@@ -46,8 +35,8 @@ class Identity(nn.Module):
 
 def train(train_params, common_params, data_params, net_params):
     train_data, test_data = load_data(data_params)
-    model_prefix = 'sne_position_all_type_both_try2_'
-    folds = ['fold2', 'fold3', 'fold4']
+    model_prefix = 'sne_position_encoder_type_spatial_'
+    folds = ['fold4']
     for fold in folds:
         final_model_path = os.path.join(common_params['save_model_dir'], model_prefix + fold + '.pth.tar')
 
@@ -122,7 +111,7 @@ def evaluate(eval_params, net_params, data_params, common_params, train_params):
     # model_name = 'model6_Dice_L2_loss_target_fold1.pth.tar'
     folds = ['fold1']
 
-    eval_model_path1 = "saved_models/sne_position_all_type_both_try2_fold1.pth.tar"
+    eval_model_path1 = "saved_models/sne_position_encoder_type_spatial_fold1.pth.tar"
     eval_model_path2 = "saved_models/model6_coronal_wholebody_condch16_e4Skip_inter_e3e4bnd4d3_ch_e1e2d1d2_noSseSeg_DiceLoss_lowrate_fold2.pth.tar"
     # eval_model_path3 = "saved_models/model6_sagittal_fold1.pth.tar"
 

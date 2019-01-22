@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.utils.data as data
 import scipy.io as sio
-import preprocessor as preprocessor
+import utils.preprocessor as preprocessor
 import nibabel as nb
 import math
 from torchvision import transforms
