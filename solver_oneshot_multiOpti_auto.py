@@ -50,11 +50,11 @@ class Solver(object):
         # self.optim = optim(model.parameters(), **optim_args)
 
         self.optim_c = optim(
-            [{'params': model.conditioner.parameters(), 'lr': 1e-2, 'momentum': 0.99, 'weight_decay': 0.0001}
+            [{'params': model.conditioner.parameters(), 'lr': 1e-3, 'momentum': 0.99, 'weight_decay': 0.0001}
              ], **optim_args)
 
         self.optim_s = optim(
-            [{'params': model.segmentor.parameters(), 'lr': 1e-2, 'momentum': 0.99, 'weight_decay': 0.0001}
+            [{'params': model.segmentor.parameters(), 'lr': 1e-3, 'momentum': 0.99, 'weight_decay': 0.0001}
              ], **optim_args)
 
         # self.scheduler = lr_scheduler.StepLR(self.optim, step_size=5,

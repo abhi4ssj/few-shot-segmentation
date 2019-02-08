@@ -123,7 +123,6 @@ class LogWriter(object):
         self.log("DONE")
         return ds_mean
 
-
     def plot_dice_score(self, phase, caption, ds, title, step=None):
         fig = matplotlib.figure.Figure(figsize=(8, 6), dpi=180, facecolor='w', edgecolor='k')
         ax = fig.add_subplot(1, 1, 1)
@@ -169,27 +168,21 @@ class LogWriter(object):
 
     def image_per_epoch(self, prediction, ground_truth, phase, epoch, additional_image=None):
         self.log("Sample Images...")
-        ncols = 5
+        ncols = 3
         nrows = len(prediction)
 
         fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(10, 20))
 
         for i in range(nrows):
-            ax[i][0].imshow(torch.squeeze(additional_image[0][i]), cmap='gray', vmin=0, vmax=1)
+            ax[i][0].imshow(additional_image[i].squeeze(), cmap='gray', vmin=0, vmax=5)
             ax[i][0].set_title("Input Image", fontsize=10, color="blue")
             ax[i][0].axis('off')
-            ax[i][1].imshow(torch.squeeze(ground_truth[i]), cmap='gray', vmin=0, vmax=1)
+            ax[i][1].imshow(ground_truth[i].squeeze(), cmap='jet', vmin=0, vmax=5)
             ax[i][1].set_title("Ground Truth", fontsize=10, color="blue")
             ax[i][1].axis('off')
-            ax[i][2].imshow(torch.squeeze(prediction[i]), cmap='gray', vmin=0, vmax=1)
+            ax[i][2].imshow(prediction[i].squeeze(), cmap='jet', vmin=0, vmax=5)
             ax[i][2].set_title("Predicted", fontsize=10, color="blue")
             ax[i][2].axis('off')
-            ax[i][3].imshow(torch.squeeze(additional_image[1][i]), cmap='gray', vmin=0, vmax=1)
-            ax[i][3].set_title("Condition Input", fontsize=10, color="blue")
-            ax[i][3].axis('off')
-            ax[i][4].imshow(torch.squeeze(additional_image[2][i]), cmap='gray', vmin=0, vmax=1)
-            ax[i][4].set_title("Condition Label", fontsize=10, color="blue")
-            ax[i][4].axis('off')
         fig.set_tight_layout(True)
         self.writer[phase].add_figure('sample_prediction/' + phase, fig, epoch)
         self.log('DONE')

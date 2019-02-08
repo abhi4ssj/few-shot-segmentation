@@ -21,7 +21,7 @@ from torchvision import transforms
 
 
 class ImdbData(data.Dataset):
-    def __init__(self, X, y, w, transforms=None):
+    def __init__(self, X, y, w=None, transforms=None):
         # TODO:Improve later
         # lung_mask_1 = (y == 4)
         # lung_mask_2 = (y == 5)
@@ -36,8 +36,11 @@ class ImdbData(data.Dataset):
     def __getitem__(self, index):
         img = torch.from_numpy(self.X[index])
         label = torch.from_numpy(self.y[index])
-        weight = torch.from_numpy(self.w[index])
-        return img, label, weight
+        if self.w is not None:
+            weight = torch.from_numpy(self.w[index])
+            return img, label, weight
+        else:
+            return img, label
 
     def __len__(self):
         return len(self.y)

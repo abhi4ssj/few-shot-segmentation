@@ -5,10 +5,11 @@ import torch
 import torch.nn as nn
 
 import utils.evaluator as eu
-import few_shot_segmentor_sne_position_encoder_type_spatial as fs
+import few_shot_segmentor_sne_position_all_type_channel as fs
 from settings import Settings
 # from solver_oneshot_singleOpti import Solver
 from solver_oneshot_multiOpti_auto import Solver
+# from solver_oneshot_shaban_baseline import Solver
 from utils.data_utils import get_imdb_dataset
 from utils.log_utils import LogWriter
 from utils.shot_batch_sampler import OneShotBatchSampler
@@ -35,8 +36,8 @@ class Identity(nn.Module):
 
 def train(train_params, common_params, data_params, net_params):
     train_data, test_data = load_data(data_params)
-    model_prefix = 'sne_position_encoder_type_spatial_'
-    folds = ['fold4']
+    model_prefix = 'sne_position_all_type_channel_'
+    folds = ['fold1', 'fold2', 'fold3', 'fold4']
     for fold in folds:
         final_model_path = os.path.join(common_params['save_model_dir'], model_prefix + fold + '.pth.tar')
 
@@ -103,15 +104,16 @@ def evaluate(eval_params, net_params, data_params, common_params, train_params):
     exp_dir = common_params['exp_dir']
     exp_name = train_params['exp_name']
     save_predictions_dir = eval_params['save_predictions_dir']
-    prediction_path = os.path.join(exp_dir, exp_name, save_predictions_dir)
+
     orientation = eval_params['orientation']
 
     logWriter = LogWriter(num_classes, log_dir, exp_name, labels=labels)
 
     # model_name = 'model6_Dice_L2_loss_target_fold1.pth.tar'
-    folds = ['fold1']
+    folds = ['fold1', 'fold2', 'fold3', 'fold4']
 
-    eval_model_path1 = "saved_models/sne_position_encoder_type_spatial_fold1.pth.tar"
+    # eval_model_path1 = "saved_models/sne_position_all_type_spatial_fold1.pth.tar"
+    eval_model_path1 = "sne_position_all_type_spatial_skipconn_baseline"
     eval_model_path2 = "saved_models/model6_coronal_wholebody_condch16_e4Skip_inter_e3e4bnd4d3_ch_e1e2d1d2_noSseSeg_DiceLoss_lowrate_fold2.pth.tar"
     # eval_model_path3 = "saved_models/model6_sagittal_fold1.pth.tar"
 
@@ -119,11 +121,15 @@ def evaluate(eval_params, net_params, data_params, common_params, train_params):
     orientaion2 = 'COR'
 
     for fold in folds:
-        # eval_model_path = os.path.join('saved_models', eval_model_path1 + '_' + fold + '.pth.tar')
+        prediction_path = os.path.join(exp_dir, exp_name)
+        prediction_path = prediction_path + "_" + fold
+        prediction_path = os.path.join(prediction_path, save_predictions_dir)
+
+        eval_model_path = os.path.join('saved_models', eval_model_path1 + '_' + fold + '.pth.tar')
         query_labels = get_lab_list('val', fold)
         num_classes = len(fold)
 
-        avg_dice_score = eu.evaluate_dice_score(eval_model_path1,
+        avg_dice_score = eu.evaluate_dice_score(eval_model_path,
                                                 num_classes,
                                                 query_labels,
                                                 data_dir,
