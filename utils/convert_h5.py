@@ -49,8 +49,8 @@ def convert_h5(data_dir, label_dir, data_split, train_volumes, test_volumes, f, 
     if data_split:
         train_file_paths, test_file_paths = apply_split(data_split, data_dir, label_dir)
     elif train_volumes and test_volumes:
-        train_file_paths = du.load_file_paths(data_dir, label_dir, train_volumes)
-        test_file_paths = du.load_file_paths(data_dir, label_dir, test_volumes)
+        train_file_paths = du.load_file_paths_brain(data_dir, label_dir, train_volumes)
+        test_file_paths = du.load_file_paths_brain(data_dir, label_dir, test_volumes)
     else:
         raise ValueError('You must either provide the split ratio or a train, train dataset list')
 

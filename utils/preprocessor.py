@@ -52,16 +52,29 @@ def remap_labels(labels, remap_config):
 
     elif remap_config == 'WholeBody':
         label_list = [1, 2, 7, 8, 9, 13, 14, 17, 18]
+
+    elif remap_config == 'brain_fewshot':
+        labels[(labels >= 100) & (labels % 2 == 0)] = 210
+        labels[(labels >= 100) & (labels % 2 == 1)] = 211
+        label_list = [[210, 211], [45, 44], [52, 51], [35], [39, 41, 40, 38], [36, 37, 57, 58, 60, 59, 56, 55]]
     else:
         raise ValueError("Invalid argument value for remap config, only valid options are FS and Neo")
 
     new_labels = np.zeros_like(labels)
 
-    for i, label in enumerate(label_list):
-        label_present = np.zeros_like(labels)
-        label_present[labels == label] = 1
-        new_labels = new_labels + (i + 1) * label_present
+    k = isinstance(label_list[0], list)
 
+    if not k:
+        for i, label in enumerate(label_list):
+            label_present = np.zeros_like(labels)
+            label_present[labels == label] = 1
+            new_labels = new_labels + (i + 1) * label_present
+    else:
+        for i, label in enumerate(label_list):
+            label_present = np.zeros_like(labels)
+            for j in label:
+                label_present[labels == j] = 1
+            new_labels = new_labels + (i + 1) * label_present
     return new_labels
 
 

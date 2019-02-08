@@ -123,12 +123,21 @@ def evaluate_dice_score(model_path,
 
             support_volume, range_index = binarize_label(support_volume, support_labelmap, query_label)
 
-            # slice_gap_support = int(np.ceil(len(support_volume) / Num_support))
+            # # Save Input
+            nifti_img = nib.MGHImage(np.squeeze(support_volume[:, 0, :, :].cpu().numpy()), np.eye(4))
+            nib.save(nifti_img, os.path.join(prediction_path, 'SupportInput_' + str('.mgz')))
 
-            # support_slice_indexes = [i for i in range(0, len(support_volume), slice_gap_support)]
+            nifti_img = nib.MGHImage(np.squeeze(support_volume[:, 1, :, :].cpu().numpy()), np.eye(4))
+            nib.save(nifti_img, os.path.join(prediction_path,  'SupportGT_' + str('.mgz')))
 
-            # if len(support_slice_indexes) < Num_support:
-            #    support_slice_indexes.append(len(support_volume) - 1)
+            print("Saved")
+
+            slice_gap_support = int(np.ceil(len(support_volume) / Num_support))
+
+            support_slice_indexes = [i for i in range(0, len(support_volume), slice_gap_support)]
+
+            if len(support_slice_indexes) < Num_support:
+                support_slice_indexes.append(len(support_volume) - 1)
 
             for vol_idx, file_path in enumerate(query_file_paths):
 
@@ -147,32 +156,50 @@ def evaluate_dice_score(model_path,
 
                 dice_per_slice = []
                 vol_output = []
-
-                for i, query_slice in enumerate(query_volume):
-                    query_batch_x = query_slice.unsqueeze(0)
-                    max_dice = -1.0
-                    max_output = None
-                    for j in range(0, len(support_volume), 5):
-                        support_slice = support_volume[j]
-
-                        support_batch_x = support_slice.unsqueeze(0)
+                for support_slice_idx in support_slice_indexes:
+                    batch_output = []
+                    for i in range(0, len(query_volume), batch_size):
+                        query_batch_x = query_volume[i: i + batch_size]
+                        support_batch_x = support_volume[support_slice_idx].repeat(query_batch_x.size()[0], 1, 1, 1)
                         if cuda_available:
                             query_batch_x = query_batch_x.cuda(device)
                             support_batch_x = support_batch_x.cuda(device)
-
                         weights = model.conditioner(support_batch_x)
                         out = model.segmentor(query_batch_x, weights)
 
-                        _, batch_output = torch.max(F.softmax(out, dim=1), dim=1)
-                        slice_dice_score = dice_score_binary(batch_output,
-                                                             query_labelmap[i].cuda(device), phase=mode)
-                        if slice_dice_score.item() >= max_dice:
-                            max_dice = slice_dice_score.item()
-                            max_output = batch_output
-                    # dice_per_slice.append(max_dice)
-                    vol_output.append(max_output)
+                        # _, batch_output = torch.max(F.softmax(out, dim=1), dim=1)
+                        batch_output.append(out)
+                    batch_output = torch.cat(batch_output)
+                    vol_output.append(batch_output)
+                vol_output = torch.stack(vol_output)
+                vol_output = torch.mean(vol_output, dim=0)
+                _, vol_output = torch.max(F.softmax(vol_output, dim=1), dim=1)
 
-                vol_output = torch.cat(vol_output)
+                # for i, query_slice in enumerate(query_volume):
+                #     query_batch_x = query_slice.unsqueeze(0)
+                #     max_dice = -1.0
+                #     max_output = None
+                #     for j in range(0, len(support_volume), 5):
+                #         support_slice = support_volume[j]
+                #
+                #         support_batch_x = support_slice.unsqueeze(0)
+                #         if cuda_available:
+                #             query_batch_x = query_batch_x.cuda(device)
+                #             support_batch_x = support_batch_x.cuda(device)
+                #
+                #         weights = model.conditioner(support_batch_x)
+                #         out = model.segmentor(query_batch_x, weights)
+                #
+                #         _, batch_output = torch.max(F.softmax(out, dim=1), dim=1)
+                #         slice_dice_score = dice_score_binary(batch_output,
+                #                                              query_labelmap[i].cuda(device), phase=mode)
+                #         if slice_dice_score.item() >= max_dice:
+                #             max_dice = slice_dice_score.item()
+                #             max_output = batch_output
+                #     # dice_per_slice.append(max_dice)
+                #     vol_output.append(max_output)
+                #
+                # vol_output = torch.cat(vol_output)
                 # volume_dice_score = np.mean(np.asarray(dice_per_slice))
                 volume_dice_score = dice_score_binary(vol_output, query_labelmap.cuda(device), phase=mode)
                 volume_dice_score_list.append(volume_dice_score)

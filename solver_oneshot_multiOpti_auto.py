@@ -6,7 +6,7 @@ from torch.optim import lr_scheduler
 import torch.nn as nn
 from utils.log_utils import LogWriter
 import utils.common_utils as common_utils
-from data_utils import split_batch
+from utils.data_utils import split_batch
 import glob
 import torch.nn.functional as F
 
@@ -50,19 +50,19 @@ class Solver(object):
         # self.optim = optim(model.parameters(), **optim_args)
 
         self.optim_c = optim(
-            [{'params': model.conditioner.parameters(), 'lr': 1e-2, 'momentum': 0.99, 'weight_decay': 0.0001}
+            [{'params': model.conditioner.parameters(), 'lr': 1e-3, 'momentum': 0.99, 'weight_decay': 0.0001}
              ], **optim_args)
 
         self.optim_s = optim(
-            [{'params': model.segmentor.parameters(), 'lr': 1e-2, 'momentum': 0.99, 'weight_decay': 0.0001}
+            [{'params': model.segmentor.parameters(), 'lr': 1e-3, 'momentum': 0.99, 'weight_decay': 0.0001}
              ], **optim_args)
 
         # self.scheduler = lr_scheduler.StepLR(self.optim, step_size=5,
         #                                        gamma=0.1)
-        self.scheduler_s = lr_scheduler.StepLR(self.optim_s, step_size=4,
-                                               gamma=0.5)
-        self.scheduler_c = lr_scheduler.StepLR(self.optim_c, step_size=4,
+        self.scheduler_s = lr_scheduler.StepLR(self.optim_s, step_size=10,
                                                gamma=0.1)
+        self.scheduler_c = lr_scheduler.StepLR(self.optim_c, step_size=10,
+                                               gamma=0.001)
 
         exp_dir_path = os.path.join(exp_dir, exp_name)
         common_utils.create_if_not(exp_dir_path)
@@ -104,7 +104,7 @@ class Solver(object):
         self.logWriter.log('START TRAINING. : model name = %s, device = %s' % (
             self.model_name, torch.cuda.get_device_name(self.device)))
         current_iteration = self.start_iteration
-        warm_up_epoch = 10
+        warm_up_epoch = 15
         val_old = 0
         change_model = False
         current_model = 'seg'

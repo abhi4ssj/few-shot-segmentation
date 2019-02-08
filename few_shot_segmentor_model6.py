@@ -100,32 +100,33 @@ class SDnetConditioner(nn.Module):
         num_batch, ch = e_c1.size()
         e_c1 = e_c1.view(num_batch, ch, 1, 1)
 
-        # e_w1 = self.sigmoid(self.squeeze_conv_e1(e1))
         e2, out2, ind2 = self.encode2(e1)
         num_batch, ch, _, _ = out2.size()
         e_c2 = self.sigmoid(self.channel_conv_e2(out2.view(num_batch, ch, -1).mean(dim=2)))
         num_batch, ch = e_c2.size()
         e_c2 = e_c2.view(num_batch, ch, 1, 1)
-        # e_w2 = self.sigmoid(self.squeeze_conv_e2(e2))
+
         e3, _, ind3 = self.encode3(e2)
         e_w3 = self.sigmoid(self.squeeze_conv_e3(e3))
-        e4, _, ind4 = self.encode3(e3)
+        e4, _, ind4 = self.encode4(e3)
         e_w4 = self.sigmoid(self.squeeze_conv_e4(e4))
 
         bn = self.bottleneck(e4)
         bn_w = self.squeeze_conv_bn(bn)
 
-        d4 = self.decode1(bn, None, ind4)
+        d4 = self.decode4(bn, None, ind4)
         d_w4 = self.sigmoid(self.squeeze_conv_d4(d4))
-        d3 = self.decode1(d4, None, ind3)
+
+        d3 = self.decode3(d4, None, ind3)
         d_w3 = self.sigmoid(self.squeeze_conv_d3(d3))
+
         d2 = self.decode2(d3, None, ind2)
         num_batch, ch, _, _ = d2.size()
         d_c2 = self.sigmoid(self.channel_conv_d2(d2.view(num_batch, ch, -1).mean(dim=2)))
         num_batch, ch = d_c2.size()
         d_c2 = d_c2.view(num_batch, ch, 1, 1)
-        # d_w2 = self.sigmoid(self.squeeze_conv_d2(d2))
-        d1 = self.decode3(d2, None, ind1)
+
+        d1 = self.decode1(d2, None, ind1)
         num_batch, ch, _, _ = d1.size()
         d_c1 = self.sigmoid(self.channel_conv_d1(d1.view(num_batch, ch, -1).mean(dim=2)))
         num_batch, ch = d_c1.size()

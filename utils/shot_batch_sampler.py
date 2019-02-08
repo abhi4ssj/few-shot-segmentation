@@ -8,8 +8,14 @@ import numpy as np
 
 lab_list_fold = {"fold1": {"train": [2, 6, 7, 8, 9], "val": [1]},
                  "fold2": {"train": [1, 6, 7, 8, 9], "val": [2]},
-                 "fold4": {"train": [1, 2, 8, 9], "val": [6, 7]},
-                 "fold5": {"train": [1, 2, 6, 7], "val": [8, 9]}}
+                 "fold3": {"train": [1, 2, 8, 9], "val": [6, 7]},
+                 "fold4": {"train": [1, 2, 6, 7], "val": [8, 9]}}
+
+# For brain
+# lab_list_fold = {"fold1": {"train": [1, 2, 3, 5, 6], "val": [4]},
+#                  "fold2": {"train": [1, 3, 4, 5, 6], "val": [2]},
+#                  "fold3": {"train": [1, 2, 3, 4, 6], "val": [5]},
+#                  "fold4": {"train": [1, 2, 3, 4, 5], "val": [6]}}
 
 # lab_list_fold = {"fold1": {"train": [2, 4, 6, 8], "val": [1]},
 #                  "fold2": {"train": [1, 4, 6, 8], "val": [2]},
