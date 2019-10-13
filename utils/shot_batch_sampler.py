@@ -1,27 +1,9 @@
 import numpy as np
 
-# lab_list_fold = {"fold1": {"train": [2, 4, 5, 6, 7, 8, 9], "val": [1]},
-#                  "fold2": {"train": [1, 4, 5, 6, 7, 8, 9], "val": [2]},
-#                  "fold3": {"train": [1, 2, 6, 7, 8, 9], "val": [4, 5]},
-#                  "fold4": {"train": [1, 2, 4, 5, 8, 9], "val": [6, 7]},
-#                  "fold5": {"train": [1, 2, 4, 5, 6, 7], "val": [8, 9]}}
-
 lab_list_fold = {"fold1": {"train": [2, 6, 7, 8, 9], "val": [1]},
                  "fold2": {"train": [1, 6, 7, 8, 9], "val": [2]},
                  "fold3": {"train": [1, 2, 8, 9], "val": [6, 7]},
                  "fold4": {"train": [1, 2, 6, 7], "val": [8, 9]}}
-
-# For brain
-# lab_list_fold = {"fold1": {"train": [1, 2, 3, 5, 6], "val": [4]},
-#                  "fold2": {"train": [1, 3, 4, 5, 6], "val": [2]},
-#                  "fold3": {"train": [1, 2, 3, 4, 6], "val": [5]},
-#                  "fold4": {"train": [1, 2, 3, 4, 5], "val": [6]}}
-
-# lab_list_fold = {"fold1": {"train": [2, 4, 6, 8], "val": [1]},
-#                  "fold2": {"train": [1, 4, 6, 8], "val": [2]},
-#                  "fold3": {"train": [1, 2, 6, 8], "val": [4]},
-#                  "fold4": {"train": [1, 2, 4, 8], "val": [6]},
-#                  "fold5": {"train": [1, 2, 4, 6], "val": [8]}}
 
 
 def get_lab_list(phase, fold):
@@ -35,7 +17,8 @@ def get_class_slices(labels, i):
     total_slices = labels == i
     pixel_sum = np.sum(total_slices, axis=(1, 2)).squeeze()
     pixel_sum = pixel_sum / (H * W)
-    threshold_list = [idx for idx, slice in enumerate(pixel_sum) if slice > thresh]
+    threshold_list = [idx for idx, slice in enumerate(
+        pixel_sum) if slice > thresh]
     return threshold_list
 
 
@@ -65,11 +48,6 @@ class OneShotBatchSampler:
 
         '''
         super(OneShotBatchSampler, self).__init__()
-
-        # TODO: Improve
-        # labels[labels == 5] = 4
-        # labels[labels == 7] = 6
-        # labels[labels == 9] = 8
 
         self.index_list = None
         self.query_label = None

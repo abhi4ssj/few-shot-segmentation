@@ -4,8 +4,8 @@ torch
 torchvision
 nibabel
 tensorboardX
-tensorflow
+tensorflow  
 torchnet
-squeeze-and-excitation
-nn-common-modules
-nn-additional-losses
+# squeeze-and-excitation   --> Doesnt work at the moment. install manually from git repo
+# nn-common-modules --> Doesnt work at the moment. install manually from git repo
+# nn-additional-losses --> Doesnt work at the moment. install manually from git repo
