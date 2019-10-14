@@ -1,4 +1,6 @@
-# Squeeze \& Excite'Guided Few-Shot Segmentation of Volumetric Images
+# 'Squeeze \& Excite' Guided Few-Shot Segmentation of Volumetric Images
+
+The paper is published at the journal Medical Image Analysis. Link to arxiv: https://arxiv.org/abs/1902.01314.
 
 This project contains the source code for training and evaluation for all the experiments of the aforementioned work. Root directory contains the neural network file 'few_shot_segmentaion.py' and the relevant 'solver.py' for the proposed method.
 
@@ -44,7 +46,7 @@ If you use this code, please cite:
 @article{roy2019squeeze,
   title={'Squeeze \& Excite'Guided Few-Shot Segmentation of Volumetric Images},
   author={Roy, Abhijit Guha and Siddiqui, Shayan and P{\"o}lsterl, Sebastian and Navab, Nassir and Wachinger, Christian},
-  journal={arXiv preprint arXiv:1902.01314},
+  journal={Medical Image Analysis},
   year={2019}
 }
 ```
